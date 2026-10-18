@@ -53,6 +53,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         Models.initMaterials();
         rend = new Renderer();
         FX.init();
+        FX.env = rend.env;
         SmokeTrail.init();
         cam = new PerspectiveCamera(62, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         cam.near = 0.3f; cam.far = 6000f;
@@ -60,6 +61,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         world = new World(rend);
         game = new Game();
         game.world = world; game.cam = cam;
+        FX.height = (x, z) -> world.height(x, z);
         draw = new Draw();
         ui = new UI(game, draw, this);
         game.ui = ui;
@@ -256,25 +258,27 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         BlackBox.mark("интерфейс: обновление");
         ui.update(dt);
         BlackBox.mark("бой");
-        game.step(dt);
+        // замедление времени (добивание босса): бой, мир и эффекты идут медленнее, камера и интерфейс — нет
+        float gdt = strike.active ? dt : dt * game.timeScale();
+        game.step(gdt);
         BlackBox.mark("рой / камера");
         if (strike.active) strike.update(dt);
         else game.updateCamera(dt);
         warmStep();
         BlackBox.mark("мир");
-        world.update(dt, cam);
+        world.update(gdt, cam);
         game.updateSpot();
         SmokeTrail.wind = world.wind;
         BlackBox.mark("эффекты");
-        FX.update(dt, cam);
+        FX.update(gdt, cam);
         FX.fill(cam);
         game.fillDyn();
         // тени — вокруг точки перед камерой
         Vector3 f = rend.shadowFocus.set(cam.direction.x, 0, cam.direction.z).nor().scl(game.state.equals("menu") ? 0 : 22).add(cam.position.x, 0, cam.position.z);
         if (game.state.equals("menu")) f.set(0, 0, 0);
         dyns.clear();
-        dyns.add(world.cloudDyn); dyns.add(FX.dDebris); dyns.add(SmokeTrail.dyn); dyns.add(FX.dSmoke);
-        dyns.add(game.tracers); dyns.add(game.beamDyn); dyns.add(strike.tracers); dyns.add(strike.beamDyn); dyns.add(FX.dAdd); dyns.add(world.rainDyn);
+        dyns.add(world.cloudDyn); dyns.add(FX.dDebris); dyns.add(FX.dCasing); dyns.add(SmokeTrail.dyn); dyns.add(FX.dSmoke);
+        dyns.add(game.tracers); dyns.add(game.beamDyn); dyns.add(strike.tracers); dyns.add(strike.beamDyn); dyns.add(FX.dAdd); dyns.add(FX.dRing); dyns.add(world.boltDyn); dyns.add(world.rainDyn);
         if (strike.active) rend.shadowFocus.set(cam.position.x, 0, cam.position.z);
         BlackBox.mark("рендер кадра");
         rend.render(roots, dyns);
@@ -322,6 +326,18 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             {"menu", "3"}, {"swarm", "1"}, {"s1", "6"}, {"s2", "8"}, {"s3", "10"}, {"spause", "1"}, {"s4", "3"}, {"sover", "4"}, {"end", "0"}};
     public static final String[][] SEQ_DUELHOST = {{"menu", "3"}, {"duel", "1"}, {"dhost", "14"}, {"dh2", "6"}, {"dh3", "10"}, {"end", "0"}};
     public static final String[][] SEQ_DUELJOIN = {{"menu", "5"}, {"djoin", "6"}, {"dj2", "4"}, {"dj3", "10"}, {"dj4", "8"}, {"end", "0"}};
+
+    /** Проверка «сочности»: выстрелы, гильзы, взрывы, облёт босса, ночь и гроза. */
+    public static final String[][] SEQ_FX = {
+            {"menu", "3"}, {"endless", "1"}, {"fx_fire", "6"}, {"fx_boom", "0.17"}, {"fx_boom2", "0.6"}, {"fx_fires", "2.5"}, {"fx_heat", "0.6"},
+            {"fx_boss", "1.3"}, {"fx_boss2", "1.2"}, {"fx_after", "2"}, {"fx_dusk", "1"}, {"fx_night", "1.5"}, {"fx_storm", "1.2"}, {"fx_bolt", "0.1"},
+            {"fx_nboom", "0.15"}, {"end", "0"}};
+
+    Vector3 ahead(float d, float up) {
+        Vector3 p = new Vector3(game.camPos).mulAdd(game.aimDir.cpy().set(game.aimDir.x, 0, game.aimDir.z).nor(), d);
+        p.y = world.height(p.x, p.z) + up;
+        return p;
+    }
 
     void shots(float dt) {
         shotT += dt;
@@ -374,6 +390,18 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "djoin": ui.debugDuelJoin("127.0.0.1"); break;
             case "dj2": duel.sendPick("gunship"); break;
             case "dh2": duel.begin(); break;
+            case "fx_fire": G.SV.night = System.getenv("SN_NIGHT") != null; G.SV.ab.put("salvo", true); ui.launch("endless"); break;
+            case "fx_boom": botOn = false; game.firing = false; game.aimYaw = 0; game.aimPitch = 0.08f; game.explosion(ahead(55, 1.5f), 2f); break;
+            case "fx_heat": game.heat = 0.97f; game.overheated = true; game.firing = false; game.aimPitch = 0.12f; break;
+            case "fx_boss": { game.heat = 0; game.overheated = false; game.aimPitch = 0.25f;
+                Game.E b = game.spawnEnemy("gunship", ahead(140, 60)); b.vel.set(0, 0, 0);
+                for (int i = 0; i < 3; i++) game.step(1f / 30f);
+                game.damageEnemy(b, 1e6f, b.pos.cpy(), "mis"); break; }
+            case "fx_dusk": world.nightK = 0.45f; world.nightTgt = 0.45f; break;
+            case "fx_night": world.nightK = 1f; world.nightTgt = 1f; break;
+            case "fx_storm": world.stormK = 1f; world.stormTgt = 1f; world.wind = 30; break;
+            case "fx_bolt": world.debugBolt(cam.position); break;
+            case "fx_nboom": game.explosion(ahead(45, 2f), 2f); break;
             default: break;
         }
     }

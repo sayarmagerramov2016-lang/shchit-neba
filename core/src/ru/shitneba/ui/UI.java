@@ -237,7 +237,7 @@ public class UI implements GameUI, InputProcessor {
         boolean hud = panel.isEmpty() && (g.state.equals("run") || g.state.equals("dying") || g.state.equals("over") || g.state.equals("result"));
         if (strike != null && strike.active) { if (panel.isEmpty()) drawStrikeHud(); }
         else if (hud && bossRole()) drawBossHud();
-        else if (hud) drawHud();
+        else if (hud) { if (g.killCamK() <= 0) drawHud(); drawKillBars(); }
         if (!panel.isEmpty()) drawPanel();
         drawToast();
         d.end();
@@ -1441,6 +1441,16 @@ public class UI implements GameUI, InputProcessor {
     void rrect(float x, float y, float w, float h, Color c, float a, boolean border) {
         d.rect(x, y, w, h, c, a);
         if (border) d.frame(x, y, w, h, 1, C_LINE, 0.22f);
+    }
+
+    /** Кинорамка при облёте добитого босса. */
+    void drawKillBars() {
+        float k = g.killCamK();
+        if (k <= 0) return;
+        float W = sx(), H = sy(), bh = H * 0.1f * k;
+        d.rect(0, 0, W, bh, BLACK, 0.92f);
+        d.rect(0, H - bh, W, bh, BLACK, 0.92f);
+        if (k > 0.6f && g.killName != null) d.text(g.killName.toUpperCase() + " СБИТ", W / 2f, H - bh / 2f + 9, 24, C_ACC, Draw.TITLE, 0);
     }
 
     void drawHud() {

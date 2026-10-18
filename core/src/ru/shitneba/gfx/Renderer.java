@@ -62,6 +62,9 @@ public class Renderer implements Disposable {
         public final Color[] sky = {new Color(), new Color(), new Color(), new Color()};
         public final Color skySun = new Color(1, 0.8f, 0.7f, 1);
         public float sunOn = 1f, skyFog = 0.15f, flash = 0f;
+        /** Точечные источники (вспышки взрывов): xyz+радиус, цвет*сила. */
+        public final float[] pl = new float[16], plc = new float[12];
+        public int plN = 0;
     }
 
     static final class Item {
@@ -100,6 +103,8 @@ public class Renderer implements Disposable {
         p.setUniformf("u_fogCol", tv);
         p.setUniformf("u_fogD", env.fogD);
         p.setUniformf("u_post", env.exposure, env.contrast, env.saturation);
+        p.setUniformf("u_plN", env.plN);
+        if (env.plN > 0) { p.setUniform4fv("u_pl", env.pl, 0, 16); p.setUniform3fv("u_plc", env.plc, 0, 12); }
     }
 
     ShaderProgram curProg;

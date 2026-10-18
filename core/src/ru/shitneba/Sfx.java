@@ -89,6 +89,25 @@ public class Sfx implements Disposable {
         return norm(out, 0.95f);
     }
 
+    /** Гром: треск разряда и долгий низкий раскат. */
+    float[] thunder() {
+        float dur = 3.4f;
+        int n = (int) (dur * RATE);
+        float[] out = new float[n];
+        float l1 = 0, l2 = 0, l3 = 0, cr = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float) i / RATE, k = t / dur;
+            float wn = randf() * 2f - 1f;
+            l1 += (wn - l1) * 0.09f; l2 += (l1 - l2) * 0.035f; l3 += (l2 - l3) * 0.02f;
+            float roll = 0.65f + 0.35f * (float) Math.sin(t * 5.3 + Math.sin(t * 2.1) * 2);
+            float env = (float) ((1 - Math.exp(-t * 18.0)) * Math.exp(-t * 0.9));
+            cr *= 0.9f;
+            if (randf() < 0.02f * (float) Math.exp(-t * 6.0)) cr = randf() * 2f - 1f;
+            out[i] = (l3 * 14f * roll + l1 * 0.5f * (float) Math.exp(-t * 3.0)) * env + cr * 0.6f * (1 - k);
+        }
+        return norm(out, 0.9f);
+    }
+
     float[] tink() {
         int n = (int) (0.08f * RATE);
         float[] out = new float[n];
@@ -166,6 +185,7 @@ public class Sfx implements Disposable {
             put("shot2", gun(0.11f, 2600, 150, 70, 0.5f));
             put("boom", boom(1.8f, 1400, 70, 62, 30, 1.0f));
             put("boom2", boom(1.5f, 1900, 90, 75, 34, 1.6f));
+            put("thunder", thunder());
             put("tink", tink());
             put("missile", whoosh(1.2f));
             put("hit", synth(0.35f, k -> MathUtils.lerp(1400, 100, k), k -> new float[]{MathUtils.lerp(120, 40, k), 0.4f}));

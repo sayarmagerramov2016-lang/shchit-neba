@@ -36,6 +36,7 @@ public class Shaders implements Disposable {
             "uniform vec4 u_color; uniform sampler2D u_tex; uniform sampler2D u_camo; uniform sampler2D u_panel; uniform sampler2D u_shadow;\n" +
             "uniform vec3 u_cam; uniform vec3 u_sunDir; uniform vec3 u_sunCol; uniform vec3 u_amb; uniform vec3 u_fogCol; uniform float u_fogD;\n" +
             "uniform vec4 u_h1; uniform vec4 u_h2; uniform vec4 u_h3; uniform vec4 u_m; uniform vec2 u_fade;\n" +
+            "uniform vec4 u_pl[4]; uniform vec3 u_plc[4]; uniform float u_plN;\n" +
             "varying vec3 v_wpos; varying vec3 v_n; varying vec4 v_col; varying vec2 v_uv; varying vec3 v_mp; varying vec3 v_mn;\n" +
             "#ifdef SHADOW\nvarying vec4 v_sh;\n" +
             "float unpack(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }\n" +
@@ -75,6 +76,9 @@ public class Shaders implements Disposable {
             " vec3 diff = col*(1.0-metal); vec3 F0 = mix(vec3(0.04), col, metal);\n" +
             " float hemi = 0.75 + 0.25*n.y;\n" +
             " lit = diff*(u_amb*hemi + u_sunCol*ndl*sh) + F0*spec*u_sunCol*ndl*sh*(1.0-rough*0.7) + col*metal*u_amb*0.55;\n" +
+            " if (u_plN > 0.5) { for (int i = 0; i < 4; i++) { vec3 L = u_pl[i].xyz - v_wpos; float dl = length(L);\n" +
+            "  float at = clamp(1.0 - dl/u_pl[i].w, 0.0, 1.0); at *= at;\n" +
+            "  lit += (diff + F0*0.5)*u_plc[i]*at*(0.25 + 0.75*max(dot(n, L/max(dl,0.001)), 0.0)); } }\n" +
             "#else\n lit = col;\n#endif\n" +
             " lit += col*u_m.w;\n" +
             "#ifdef FOG\n float fd = length(u_cam - v_wpos); float f = 1.0 - exp(-u_fogD*fd);\n" +

@@ -45,6 +45,13 @@ public class Game {
     public int missiles = 4;
     public float reloadT, chanT;
     public float shake, hurtT;
+    // ---------- сочность: отдача, тряска, облёт босса ----------
+    public float recoil, quake;
+    Vector3 pitchBase, rootBase;
+    public float killCamT; static final float KILL_DUR = 2.7f;
+    final Vector3 killFocus = new Vector3(); Node3 killNode; float killR, killA0;
+    public String killName;
+    float steamT; int stormLeft;
     int toSpawn; float spawnT, spawnInt = 1.3f; public float between; float deadT;
     public final Array<E> bosses = new Array<>();
     float missionTime;
@@ -409,6 +416,7 @@ public class Game {
         }
         vm = Models.vehicle(VEH, G.SV.skVeh);
         vm.root.pos.y = 0.25f;
+        pitchBase = vm.pitch.pos.cpy(); rootBase = vm.root.pos.cpy();
         root.add(vm.root);
         vm.root.updateGlobal(root.global);
     }
@@ -579,6 +587,9 @@ public class Game {
             statAdd("bosses", 1); qProg("boss", 1, false); statAdd("b_" + e.type, 1);
             if (ui != null) ui.toast(G.D.get("BOSS_INFO").get(e.type).getString("short") + " уничтожен!");
             shake = Math.max(shake, 1.2f); G.hap(80);
+            FX.light(e.pos, 160f, 1f, 0.6f, 0.3f, 9f, 0.6f);
+            G.sfx("boom2", 1f, 80);
+            startKillCam(e);
         }
         if (e.ground) FX.puff(tmpV.set(e.pos).add(0, 1, 0), 3f, new Color(0.1f, 0.1f, 0.1f, 1), 0.6f, 5f, 3f);
         score += Math.round(D.getFloat("pts") * 10 * (1 + (float) Math.floor(combo / 5f) * 0.1f));
@@ -604,6 +615,34 @@ public class Game {
         if (!e.ground && !noWreck) makeWreck(e, sz);
         else if (e.type.equals("mini") && R.nextFloat() < 0.5f) makeWreck(e, sz);
         removeEnemy(e);
+    }
+
+    /** Замедление и облёт камерой вокруг падающего босса. */
+    void startKillCam(E e) {
+        if (mode.equals("duel") || netView || !state.equals("run") || (vm != null && vm.broken)) return;
+        killNode = e.g; killFocus.set(e.pos);
+        killR = MathUtils.clamp(e.r * 3.4f + 20f, 28f, 90f);
+        killA0 = MathUtils.atan2(camPos.x - e.pos.x, camPos.z - e.pos.z) - 0.5f;
+        JsonValue bi = G.D.get("BOSS_INFO").get(e.type);
+        killName = bi != null ? bi.getString("short", "Босс") : "Босс";
+        killCamT = KILL_DUR;
+        BlackBox.log("облёт босса: " + e.type);
+    }
+
+    /** Множитель скорости времени для боя (1 — обычная скорость). */
+    public float timeScale() {
+        if (killCamT <= 0) return 1f;
+        float p = 1f - killCamT / KILL_DUR;
+        if (p < 0.06f) return MathUtils.lerp(1f, 0.2f, p / 0.06f);
+        if (p > 0.78f) return MathUtils.lerp(0.2f, 1f, (p - 0.78f) / 0.22f);
+        return 0.2f;
+    }
+
+    /** Насколько сейчас включена кинорамка (0..1). */
+    public float killCamK() {
+        if (killCamT <= 0) return 0;
+        float p = 1f - killCamT / KILL_DUR;
+        return Math.min(MathUtils.clamp(p / 0.1f, 0, 1), MathUtils.clamp((1f - p) / 0.15f, 0, 1));
     }
 
     void makeWreck(E e, float sz) {
@@ -1181,10 +1220,64 @@ public class Game {
         b.pos.set(from); b.prev.set(from); b.o.set(from); b.vel.set(v); b.life = 2.2f; b.dmg = st("dmg"); b.flak = st("flak") > 0;
         bullets.add(b);
         FX.glow(tmpV.set(from).mulAdd(v, 0.005f), VEH.equals("grom") ? 4.2f : 2.8f, new Color(1, 0.85f, 0.5f, 1), 0.06f);
+        shotJuice(from, v);
         if (VEH.equals("grom")) {
             G.sfx("flak", 0.8f, 60); shake = Math.max(shake, 0.12f);
             FX.puff(tmpV.set(from).mulAdd(v, 0.01f), 1.2f, new Color(0.5f, 0.5f, 0.48f, 1), 0.4f, 0.8f, 1f);
         } else G.sfx(VEH.equals("shilka") ? "shot2" : "shot", 0.7f, 38);
+    }
+
+    final Vector3 jA = new Vector3(), jB = new Vector3();
+
+    /** Отдача, вспышка-свет, гильзы, у «Грома» — тряска земли и пыль. */
+    void shotJuice(Vector3 from, Vector3 vel) {
+        boolean grom = VEH.equals("grom"), shilka = VEH.equals("shilka");
+        recoil = Math.min(1f, recoil + (grom ? 0.8f : (shilka ? 0.16f : 0.3f)));
+        FX.light(from, grom ? 26f : 15f, 1f, 0.72f, 0.38f, grom ? 2.6f : 1.3f, 0.07f);
+        if (!G.isMobile() || R.nextFloat() < 0.6f) {
+            float side = vm.barrels.get(barrelI).x >= 0 ? 1f : -1f;
+            jA.set(MathUtils.cos(aimYaw) * side, 0, -MathUtils.sin(aimYaw) * side);
+            jB.set(vel).nor();
+            Vector3 breech = tmpV.set(from).mulAdd(jB, grom ? -2.6f : -1.7f);
+            FX.casing(breech, jA, grom);
+        }
+        if (grom) {
+            quake = Math.min(1f, quake + 0.55f);
+            shake = Math.max(shake, 0.2f);
+            G.hap(20);
+            int n = G.isMobile() ? 2 : 3;
+            for (int i = 0; i < n; i++) {
+                float a = R.nextFloat() * MathUtils.PI2, r = rr(3.5f, 7f);
+                float x = MathUtils.sin(a) * r, z = MathUtils.cos(a) * r;
+                FX.puff(tmpV.set(x, height(x, z) + 0.4f, z), 1.6f, new Color(0.46f, 0.39f, 0.3f, 1), 0.45f, 1.8f, 1.2f);
+            }
+            if (R.nextFloat() < 0.5f) FX.groundDust(tmpV.set(0, height(0, 0), 0), 0.5f);
+        }
+    }
+
+    /** Раскалённые стволы и пар при перегреве. */
+    void heatJuice(float dt) {
+        if (vm == null || vm.broken || vm.barrels.size == 0 || st("gun") <= 0 || VEH.equals("tor")) return;
+        if (heat < 0.25f) { steamT = 0; return; }
+        float hk = MathUtils.clamp((heat - 0.25f) / 0.75f, 0, 1);
+        float[] g = vm.pitch.global.val;
+        jB.set(g[Matrix4.M02], g[Matrix4.M12], g[Matrix4.M22]).nor(); // назад вдоль ствола
+        float gl = VEH.equals("grom") ? 1.6f : 1f;
+        for (int i = 0; i < vm.barrels.size; i++) {
+            barrelWorld(i, jA);
+            for (int j = 0; j < 3; j++) {
+                tmpV.set(jA).mulAdd(jB, (0.3f + j * 0.55f) * gl);
+                float a = hk * (0.95f - 0.25f * j) * (0.85f + 0.15f * MathUtils.sin(T * 30f + i));
+                FX.frameGlow(tmpV, (0.42f + 0.1f * j) * gl, 0.9f, 0.12f + 0.25f * hk * hk, 0.02f, a * 0.55f);
+            }
+        }
+        steamT -= dt;
+        if (steamT <= 0 && (hk > 0.7f || overheated)) {
+            steamT = overheated ? 0.09f : 0.22f;
+            barrelWorld(R.nextInt(vm.barrels.size), jA);
+            tmpV.set(jA).mulAdd(jB, rr(0.2f, 1.4f) * gl).add(0, 0.25f, 0);
+            FX.puff(tmpV, 0.4f * gl, new Color(0.86f, 0.87f, 0.9f, 1), overheated ? 0.35f : 0.2f, 1.2f, 2.8f);
+        }
     }
 
     static boolean segHit(Vector3 a, Vector3 b, Vector3 c, float r) {
@@ -1410,6 +1503,8 @@ public class Game {
         else fwd.set(aimDir);
         node.lookDir(fwd, Math.abs(fwd.y) < 0.98f ? Vector3.Y : Vector3.X);
         FX.launchBlast(from, fwd);
+        FX.light(from, 34f, 1f, 0.7f, 0.4f, 3f, 0.3f);
+        recoil = Math.min(1f, recoil + 0.35f);
         shake = Math.max(shake, 0.18f);
         E tgt;
         if (target instanceof String) tgt = (lock.t != null && lock.k >= 1) ? lock.t : null;
@@ -1569,7 +1664,7 @@ public class Game {
         wrecks.clear(); dmgNums.clear(); hitMark = 0; beamUsed = 0;
         for (Rocket r : rockets) { r.node.remove(); r.trail.stop(); }
         rockets.clear(); bullets.clear(); ebul.clear(); bosses.clear(); timers.clear(); bolts.clear();
-        lock.t = null;
+        lock.t = null; killCamT = 0; killNode = null; recoil = 0; quake = 0; stormLeft = 0;
         if (obj != null) for (Objs.Obj m : obj.models) m.g.remove();
         obj = null;
         tracers.clear();
@@ -1608,7 +1703,10 @@ public class Game {
             JsonValue wx = CM.get("weather");
             world.build(CM.getInt("theme", 0), CM.getBoolean("dark", false), wx != null ? wx.getFloat("rain", 0) : 0, wx != null ? wx.getFloat("fog", 0) : 0,
                     wx != null ? wx.getFloat("wind", 0) : 0, CM.has("obj") ? CM.get("obj").getString("kind", "") : "", CM.getBoolean("noBeam", false));
-        } else world.build(0, nightRun, 0, 0, 0, "", false);
+        } else {
+            world.build(0, nightRun, 0, 0, 0, "", false);
+            if (m.equals("endless")) world.enableDynamic();
+        }
         for (Vector3 s : world.stacks) FX.chimney(s);
         obj = makeObj();
         setupMogs();
@@ -2000,11 +2098,30 @@ public class Game {
             shake = Math.max(0, shake - dt * 2.2f);
         }
         aimPoint.set(camPos).mulAdd(aimDir, 450);
+        // отдача: камеру толкает назад и чуть подбрасывает прицел; «Гром» трясёт землю
+        boolean grom = VEH.equals("grom");
+        cp.mulAdd(aimDir, -recoil * recoil * (grom ? 0.6f : 0.22f));
+        if (quake > 0) cp.y += MathUtils.sin(T * 61f) * quake * 0.22f + MathUtils.sin(T * 37f) * quake * 0.12f;
         cam.position.set(cp);
-        cam.direction.set(aimDir);
+        cam.direction.set(aimDir).add(0, recoil * recoil * (grom ? 0.03f : 0.01f), 0).nor();
+        if (killCamT > 0) {
+            killCamT -= dt;
+            float pr = 1f - Math.max(0, killCamT) / KILL_DUR;
+            float k = Math.min(smooth(MathUtils.clamp(pr / 0.14f, 0, 1)), smooth(MathUtils.clamp((1f - pr) / 0.2f, 0, 1)));
+            Vector3 f = (killNode != null && killNode.parent != null) ? killNode.gpos(jA) : jA.set(killFocus);
+            killFocus.set(f);
+            float a = killA0 + pr * 1.4f;
+            jB.set(f).add(MathUtils.sin(a) * killR, killR * 0.3f + 3f, MathUtils.cos(a) * killR);
+            jB.y = Math.max(jB.y, height(jB.x, jB.z) + 3f);
+            cam.position.lerp(jB, k);
+            tmpV.set(f).sub(cam.position).nor();
+            cam.direction.lerp(tmpV, k).nor();
+        }
         cam.up.set(Vector3.Y);
         cam.update();
     }
+
+    static float smooth(float x) { return x * x * (3 - 2 * x); }
 
     // ---------- шаг ----------
     public void step(float dt) {
@@ -2053,7 +2170,18 @@ public class Game {
                 if (mode.equals("duel")) { if (!netView) duelRules(dt); }
                 else updateWaves(dt);
                 updateTut(dt);
-                if (mode.equals("endless") && wave >= 6 && between > 0 && wxRoll != wave) {
+                if (mode.equals("endless") && world.dynSky) {
+                    // закат постепенно переходит в ночь: с 6-й волны темнеет, к 11-й — ночь
+                    world.nightTgt = MathUtils.clamp((wave - 5) / 6f, 0, 1);
+                    if (wave >= 4 && between > 0 && wxRoll != wave) {
+                        wxRoll = wave;
+                        if (stormLeft > 0) { stormLeft--; if (stormLeft == 0) { world.stormTgt = 0; if (ui != null) ui.toast("Гроза уходит"); } }
+                        else if (R.nextFloat() < 0.3f) {
+                            stormLeft = 2; world.stormTgt = 1;
+                            if (ui != null) ui.toast("Надвигается гроза — молнии подсвечивают цели");
+                        }
+                    }
+                } else if (mode.equals("endless") && wave >= 6 && between > 0 && wxRoll != wave) {
                     wxRoll = wave;
                     if (R.nextFloat() < 0.3f) {
                         world.rain = R.nextFloat() < 0.6f ? 1 : 0;
@@ -2079,6 +2207,15 @@ public class Game {
         }
         updateBullets(dt);
         updateWreck(dt);
+        recoil = Math.max(0, recoil - dt * 7f); quake = Math.max(0, quake - dt * 3f);
+        if (state.equals("run")) heatJuice(dt);
+        if (vm != null && !vm.broken && pitchBase != null) {
+            boolean grom = VEH.equals("grom");
+            float rk = recoil * recoil;
+            vm.pitch.pos.set(pitchBase).add(0, 0, rk * (grom ? 0.32f : 0.12f));
+            vm.root.pos.set(rootBase);
+            if (grom) vm.root.pos.add(MathUtils.sin(aimYaw) * rk * 0.12f + rr(-1, 1) * quake * 0.03f, quake * 0.025f * rr(-1, 1), MathUtils.cos(aimYaw) * rk * 0.12f + rr(-1, 1) * quake * 0.03f);
+        }
         if (vm != null && !vm.broken) {
             vm.turret.setEuler(0, state.equals("menu") ? MathUtils.sin(T * 0.4f) * 0.6f : aimYaw, 0);
             vm.pitch.setEuler(state.equals("menu") ? 0.35f + MathUtils.sin(T * 0.5f) * 0.1f : aimPitch, 0, 0);

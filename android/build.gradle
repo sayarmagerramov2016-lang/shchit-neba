@@ -15,8 +15,8 @@ android {
         applicationId 'ru.shitneba3d'
         minSdk 21
         targetSdk 34
-        versionCode 312
-        versionName '3.1.2'
+        versionCode 320
+        versionName '3.2.0'
     }
     signingConfigs {
         release {

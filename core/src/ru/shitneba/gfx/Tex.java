@@ -236,6 +236,23 @@ public final class Tex {
         return t;
     }
 
+    /** Кольцо ударной волны: яркий край, мягкий спад внутрь. */
+    public static Texture ring() {
+        if (cache.containsKey("ring")) return cache.get("ring");
+        int S = 128;
+        Img im = new Img(S, S, new Color(1, 1, 1, 0));
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float dx = x - S / 2f + 0.5f, dy = y - S / 2f + 0.5f;
+            float r = (float) Math.sqrt(dx * dx + dy * dy) / (S / 2f);
+            float a = r > 1f ? 0f : (r > 0.86f ? (1f - r) / 0.14f : (float) Math.pow(r / 0.86f, 5f));
+            im.set(x, y, 1, 1, 1, MathUtils.clamp(a, 0, 1));
+        }
+        Texture t = tex(im, true);
+        t.setWrap(Texture.TextureWrap.ClampToEdge, Texture.TextureWrap.ClampToEdge);
+        cache.put("ring", t);
+        return t;
+    }
+
     public static Texture smoke() {
         if (cache.containsKey("smoke")) return cache.get("smoke");
         int S = 128;

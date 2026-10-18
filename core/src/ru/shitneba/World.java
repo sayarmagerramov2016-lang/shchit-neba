@@ -60,7 +60,7 @@ public class World {
     public final Array<Vector3> stacks = new Array<>();
     final Color cloudTint = new Color();
     public final Color smokeTint = new Color(0.84f, 0.83f, 0.81f, 1);
-    public final Dyn cloudDyn, rainDyn;
+    public final Dyn cloudDyn, rainDyn, boltDyn;
     Mat starMat;
     float[] precip;
 
@@ -70,6 +70,151 @@ public class World {
         cloudDyn = new Dyn(cm);
         Mat rm = new Mat(); rm.unshaded = true; rm.vcol = true; rm.blend = Mat.ALPHA; rm.depthWrite = false; rm.cull = false;
         rainDyn = new Dyn(rm);
+        Mat lm = new Mat(); lm.unshaded = true; lm.vcol = true; lm.tex = Tex.soft(0.6f); lm.blend = Mat.ADD; lm.depthWrite = false; lm.cull = false; lm.fog = false; lm.order = 7;
+        boltDyn = new Dyn(lm);
+    }
+
+    // ---------- погода и время суток прямо в бою ----------
+    /** Небо меняется по ходу боя: nightK 0..1 — закат→ночь, stormK 0..1 — гроза. */
+    public boolean dynSky;
+    public float nightK, stormK, nightTgt, stormTgt;
+    final Color[] dSky = {new Color(), new Color(), new Color(), new Color()}, nSky = {new Color(), new Color(), new Color(), new Color()};
+    final Color dAmb = new Color(), nAmb = new Color(), dFog = new Color(), nFog = new Color(), dSunC = new Color(), nSunC = new Color(), dSkySun = new Color();
+    final Color dCloud = new Color(), dSmoke = new Color();
+    final Vector3 dSunDir = new Vector3(), nSunDir = new Vector3();
+    float dAmbE, dFogD, dSunE, dSunOn, dExp;
+    static final Color STORM_SKY = new Color(0.30f, 0.33f, 0.40f, 1), STORM_FOG = new Color(0.33f, 0.36f, 0.42f, 1);
+    static final Color N_CLOUD = new Color(0.16f, 0.21f, 0.31f, 1), S_CLOUD = new Color(0.36f, 0.38f, 0.42f, 1), N_SMOKE = new Color(0.4f, 0.42f, 0.48f, 1);
+
+    /** Включить смену времени суток и погоды для текущей карты (после build). */
+    public void enableDynamic() {
+        if (night) return;
+        Renderer.Env e = rend.env;
+        for (int i = 0; i < 4; i++) dSky[i].set(e.sky[i]);
+        dAmb.set(e.amb); dFog.set(e.fogCol); dSunC.set(e.sunCol); dSkySun.set(e.skySun); dSunDir.set(e.sunDir);
+        dAmbE = e.ambEnergy; dFogD = e.fogD; dSunE = e.sunEnergy; dSunOn = e.sunOn; dExp = e.exposure;
+        dCloud.set(cloudTint); dSmoke.set(smokeTint);
+        JsonValue nt = null;
+        for (JsonValue t = G.D.get("THEMES").child; t != null; t = t.next) if ("night".equals(t.getString("name"))) nt = t;
+        JsonValue sk = nt != null ? nt.get("sky") : null;
+        for (int i = 0; i < 4; i++) nSky[i].set(sk != null ? c(sk.getString(i)) : dSky[i].cpy().mul(0.15f));
+        nAmb.set(c("33476e")); nFog.set(c("0e1626")); nSunC.set(c("8fa6d8"));
+        float az = (0.7f - 0.5f) * 1.4f;
+        nSunDir.set(-MathUtils.sin(az) * MathUtils.cos(0.5f), MathUtils.sin(0.5f), -MathUtils.cos(az) * MathUtils.cos(0.5f)).nor();
+        if (stars == null) buildStars();
+        for (Node3 n : new Node3[]{stars, moon}) {
+            Mat m = n.mat; m.blend = Mat.ADD; m.depthWrite = false; m.cull = false; n.alpha = 0f; n.visible = false;
+        }
+        dynSky = true; nightK = nightTgt = 0; stormK = stormTgt = 0;
+    }
+
+    static Color mix(Color out, Color a, Color b, float t) { return out.set(a).lerp(b, t); }
+
+    final Color tc = new Color();
+
+    void applyDynamic(float dt) {
+        nightK = approach(nightK, nightTgt, dt * 0.022f);
+        stormK = approach(stormK, stormTgt, dt * 0.06f);
+        float nk = nightK * nightK * (3 - 2 * nightK), sk = stormK * stormK * (3 - 2 * stormK);
+        Renderer.Env e = rend.env;
+        float dark = 1f - 0.75f * nk;
+        for (int i = 0; i < 4; i++) { mix(e.sky[i], dSky[i], nSky[i], nk); e.sky[i].lerp(tc.set(STORM_SKY).mul(dark * (0.55f + i * 0.15f)), sk * 0.85f); }
+        e.sunDir.set(dSunDir).lerp(nSunDir, nk).nor();
+        e.skySun.set(dSkySun);
+        e.sunOn = dSunOn * (1 - nk) * (1 - 0.75f * sk);
+        mix(e.amb, dAmb, nAmb, nk).lerp(tc.set(0.55f, 0.58f, 0.64f, 1).mul(dark), sk * 0.5f);
+        e.ambEnergy = MathUtils.lerp(dAmbE, 0.6f, nk);
+        e.exposure = MathUtils.lerp(dExp, 1.15f, nk);
+        mix(e.fogCol, dFog, nFog, nk).lerp(tc.set(STORM_FOG).mul(dark), sk * 0.7f);
+        e.fogD = MathUtils.lerp(dFogD, 0.0007f, nk) * (1 + 1.3f * sk);
+        mix(e.sunCol, dSunC, nSunC, nk);
+        e.sunEnergy = MathUtils.lerp(dSunE, 0.45f, nk) * (1 - 0.5f * sk);
+        mix(cloudTint, dCloud, N_CLOUD, nk).lerp(tc.set(S_CLOUD).mul(dark), sk * 0.8f);
+        mix(smokeTint, dSmoke, N_SMOKE, nk);
+        SmokeTrail.tint.set(smokeTint);
+        FX.smokeLum = (1f - 0.62f * nk) * (1f - 0.3f * sk);
+        float sa = nk * (1 - 0.85f * sk);
+        stars.alpha = sa; stars.visible = sa > 0.02f;
+        moon.alpha = sa; moon.visible = sa > 0.02f;
+        beamOn = nk > 0.6f;
+        if (beam != null) beam.visible = beamOn;
+        float r0 = rain;
+        rain = sk > 0.3f ? 1 : 0;
+        if (rain > 0 && r0 == 0) { lightning = rr(1.5f, 4f); if (wind == 0) wind = rr(-50, 50); }
+        if (rain == 0) wind = 0;
+    }
+
+    static float approach(float v, float t, float d) { return v < t ? Math.min(t, v + d) : Math.max(t, v - d); }
+
+    // ---------- молнии ----------
+    final Array<float[]> bolts = new Array<>();
+    float thunderT = -1, thunderVol;
+
+    void spawnBolt(Vector3 cp) {
+        // молнии в основном там, куда смотрит игрок
+        float a = MathUtils.atan2(-rend.cam.direction.x, -rend.cam.direction.z) + MathUtils.PI + rr(-1.1f, 1.1f), d = rr(320, 1100);
+        float bx = cp.x + MathUtils.sin(a) * d, bz = cp.z + MathUtils.cos(a) * d, by = height(bx, bz);
+        float top = by + rr(240, 330);
+        int seg = 14;
+        float[] pts = new float[(seg + 1) * 3 + 1];
+        float x = bx + rr(-60, 60), z = bz + rr(-60, 60);
+        for (int i = 0; i <= seg; i++) {
+            float k = (float) i / seg;
+            float tx = MathUtils.lerp(x, bx, k), tz = MathUtils.lerp(z, bz, k);
+            float j = (i == 0 || i == seg) ? 0 : 22f;
+            pts[i * 3] = tx + rr(-j, j); pts[i * 3 + 1] = MathUtils.lerp(top, by, k); pts[i * 3 + 2] = tz + rr(-j, j);
+        }
+        pts[pts.length - 1] = 0;
+        bolts.add(pts);
+        // ответвление
+        int from = 3 + R.nextInt(6), n2 = 5;
+        float[] br = new float[(n2 + 1) * 3 + 1];
+        float ox = pts[from * 3], oy = pts[from * 3 + 1], oz = pts[from * 3 + 2], dx = rr(-1, 1), dz = rr(-1, 1);
+        for (int i = 0; i <= n2; i++) {
+            br[i * 3] = ox + dx * i * 18 + rr(-8, 8); br[i * 3 + 1] = oy - i * 16; br[i * 3 + 2] = oz + dz * i * 18 + rr(-8, 8);
+        }
+        br[br.length - 1] = 0.6f;
+        bolts.add(br);
+        FX.light(tv.set(bx, by + 60, bz), 900f, 0.7f, 0.78f, 1f, 3.5f, 0.3f);
+        thunderT = Math.min(2.6f, d / 340f) * 0.8f + 0.15f;
+        thunderVol = MathUtils.clamp(1.25f - d / 1300f, 0.35f, 1f);
+    }
+
+    /** Для автотеста: молния прямо сейчас. */
+    public void debugBolt(Vector3 cp) { lightning = 0.001f; }
+
+    void drawBolts(float dt, Vector3 cp) {
+        boltDyn.clear();
+        if (thunderT >= 0) { thunderT -= dt; if (thunderT < 0) G.sfx("thunder", thunderVol, 600); }
+        for (int b = bolts.size - 1; b >= 0; b--) {
+            float[] p = bolts.get(b);
+            int L = p.length - 1;
+            // последний элемент: возраст (у ответвлений сдвинут, чтобы гасли раньше)
+            p[L] += dt;
+            float age = p[L] - (L < 25 ? 0.6f : 0f);
+            if (age > 0.42f) { bolts.removeIndex(b); continue; }
+            float al = (age < 0.07f || (age > 0.13f && age < 0.2f)) ? 1f : 0.35f;
+            al *= 1f - age / 0.42f;
+            float w = L < 25 ? 2.2f : 3.6f;
+            for (int i = 0; i + 5 < L; i += 3) {
+                float ax = p[i], ay = p[i + 1], az = p[i + 2], bx = p[i + 3], by = p[i + 4], bz = p[i + 5];
+                float dx = bx - ax, dy = by - ay, dz = bz - az, vx = cp.x - ax, vy = cp.y - ay, vz = cp.z - az;
+                float sx = dy * vz - dz * vy, sy = dz * vx - dx * vz, sz = dx * vy - dy * vx;
+                float sl = (float) Math.sqrt(sx * sx + sy * sy + sz * sz);
+                if (sl < 1e-4f) continue;
+                for (int pass = 0; pass < 2; pass++) {
+                    float ww = pass == 0 ? w * 4.5f : w, k = (pass == 0 ? 0.35f : 1f) * al;
+                    float ox = sx / sl * ww, oy = sy / sl * ww, oz = sz / sl * ww;
+                    float r = 0.75f * k, g = 0.82f * k, bb = 1f * k;
+                    boltDyn.vert(ax - ox, ay - oy, az - oz, 0, 1, 0, r, g, bb, k, 0, 0.5f);
+                    boltDyn.vert(ax + ox, ay + oy, az + oz, 0, 1, 0, r, g, bb, k, 1, 0.5f);
+                    boltDyn.vert(bx + ox, by + oy, bz + oz, 0, 1, 0, r, g, bb, k, 1, 0.5f);
+                    boltDyn.vert(ax - ox, ay - oy, az - oz, 0, 1, 0, r, g, bb, k, 0, 0.5f);
+                    boltDyn.vert(bx + ox, by + oy, bz + oz, 0, 1, 0, r, g, bb, k, 1, 0.5f);
+                    boltDyn.vert(bx - ox, by - oy, bz - oz, 0, 1, 0, r, g, bb, k, 0, 0.5f);
+                }
+            }
+        }
     }
 
     float rr(float a, float b) { return a + R.nextFloat() * (b - a); }
@@ -116,6 +261,7 @@ public class World {
         sea = T.getBoolean("sea", false);
         dam = "dam".equals(obj);
         rain = wRain; fog = wFog; wind = wWind;
+        dynSky = false; nightK = stormK = nightTgt = stormTgt = 0; bolts.clear(); thunderT = -1; FX.smokeLum = 1f;
         snow = T.getBoolean("snow", false);
         stacks.clear(); clouds.clear();
         int gfx = G.SV.gfx;
@@ -579,11 +725,18 @@ public class World {
         Vector3 cp = cam.position;
         if (stars != null) stars.pos.set(cp.x, 0, cp.z);
         if (moon != null) moon.pos.set(cp.x, 0, cp.z).add(tv.set(0.5f, 0.45f, -1).nor().scl(2500));
+        if (dynSky) applyDynamic(dt);
         if (rain > 0) {
             lightning -= dt;
-            if (lightning <= 0) { lightning = rr(5, 12); flashT = 0.25f; }
+            if (lightning <= 0) {
+                boolean st = dynSky && stormK > 0.5f;
+                lightning = st ? rr(3, 8) : rr(5, 12); flashT = st ? 0.32f : 0.25f;
+                spawnBolt(cp);
+            }
         }
-        if (flashT > 0) { flashT -= dt; rend.env.flash = Math.max(0, flashT) * 1.0f; } else rend.env.flash = 0;
+        // молния подсвечивает всё вокруг, включая дроны (двойная вспышка)
+        if (flashT > 0) { flashT -= dt; float f = Math.max(0, flashT); rend.env.flash = (f > 0.2f || (f > 0.06f && f < 0.12f)) ? f * 1.4f : f * 0.4f; } else rend.env.flash = 0;
+        drawBolts(dt, cp);
         // облака
         cloudDyn.clear();
         Vector3 right = rightV.set(cam.direction).crs(cam.up).nor();
@@ -592,7 +745,7 @@ public class World {
         // vcol у облаков — линейный цвет; переводим из sRGB
         cr = (float) Math.pow(cr, 2.2); cg = (float) Math.pow(cg, 2.2); cb = (float) Math.pow(cb, 2.2);
         for (float[] c2 : clouds) {
-            float x = c2[0], y = c2[1], z = c2[2], hw = c2[3] / 2, hh = c2[4] / 2, a = c2[5];
+            float x = c2[0], y = c2[1], z = c2[2], hw = c2[3] / 2, hh = c2[4] / 2, a = dynSky ? Math.min(1f, c2[5] * (1f + stormK * 0.6f)) : c2[5];
             float ax = x - right.x * hw - up.x * hh, ay = y - right.y * hw - up.y * hh, az = z - right.z * hw - up.z * hh;
             float bx = x + right.x * hw - up.x * hh, by = y + right.y * hw - up.y * hh, bz = z + right.z * hw - up.z * hh;
             float cx = x + right.x * hw + up.x * hh, cy = y + right.y * hw + up.y * hh, cz = z + right.z * hw + up.z * hh;
@@ -631,5 +784,5 @@ public class World {
         }
     }
 
-    public void dispose() { for (Mesh3 m : meshes) m.dispose(); meshes.clear(); cloudDyn.dispose(); rainDyn.dispose(); }
+    public void dispose() { for (Mesh3 m : meshes) m.dispose(); meshes.clear(); cloudDyn.dispose(); rainDyn.dispose(); boltDyn.dispose(); }
 }

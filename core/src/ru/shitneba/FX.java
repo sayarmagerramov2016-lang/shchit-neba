@@ -14,12 +14,19 @@ import ru.shitneba.gfx.MB;
 import ru.shitneba.gfx.Mat;
 import ru.shitneba.gfx.Mesh3;
 import ru.shitneba.gfx.Node3;
+import ru.shitneba.gfx.Renderer;
 import ru.shitneba.gfx.Tex;
 
 /** Частицы — эмуляция CPUParticles3D из fx.gd (взрывы, искры, дым, горелки, шлейфы). */
 public final class FX {
     static final Random R = new Random();
-    public static Dyn dAdd, dSmoke, dDebris;
+    public static Dyn dAdd, dSmoke, dDebris, dRing, dCasing;
+    /** Высота земли (для гильз, обломков и пожаров). */
+    public interface HeightFn { float h(float x, float z); }
+    public static HeightFn height;
+    public static Renderer.Env env;
+    /** Яркость дыма (ночью и в грозу дым темнее). */
+    public static float smokeLum = 1f;
     static final Array<P> parts = new Array<>(false, 2048);
     static final Array<P> free = new Array<>(false, 2048);
     public static final Array<Emitter> emitters = new Array<>();
@@ -29,7 +36,7 @@ public final class FX {
     static Mat coreMat;
     static Mesh3 coreMesh;
 
-    public static final int K_ADD = 0, K_SMOKE = 1, K_DEBRIS = 2;
+    public static final int K_ADD = 0, K_SMOKE = 1, K_DEBRIS = 2, K_RING = 3, K_CASING = 4;
 
     /** Шаблон эмиссии: параметры CPUParticles3D. */
     public static final class Cfg {
@@ -40,6 +47,16 @@ public final class FX {
         public float[] ramp; // [off, r,g,b,a]*
         public float sphere = 0;
         public float angVel = 0;
+        /** Плоское кольцо по земле вместо билборда. */
+        public boolean flat;
+        /** Отскок от земли (гильзы). */
+        public boolean bounce;
+        /** Шлейф за частицей (горящие обломки): шаблон и частота в секунду. */
+        public Cfg trail; public float trailRate;
+        /** Шанс оставить пожар, упав на землю. */
+        public float groundFire;
+        /** Размеры коробки для обломков/гильз. */
+        public float bx = 0.35f, by = 0.2f, bz = 0.3f;
 
         public Cfg vel(float a, float b) { vMin = a; vMax = b; return this; }
         public Cfg damp(float a, float b) { dMin = a; dMax = b; return this; }
@@ -53,7 +70,8 @@ public final class FX {
     }
 
     static final class P {
-        float x, y, z, vx, vy, vz, age, life, sc, damp, rot, rotV, ax, ay, az;
+        float x, y, z, vx, vy, vz, age, life, sc, damp, rot, rotV, ax, ay, az, tacc;
+        boolean landed;
         Cfg c;
     }
 
@@ -67,6 +85,10 @@ public final class FX {
         dSmoke = new Dyn(s);
         Mat d = Mat.std(new Color(0.12f, 0.12f, 0.12f, 1)); d.vcol = false; d.rough = 0.9f;
         dDebris = new Dyn(d);
+        Mat rg = new Mat(); rg.unshaded = true; rg.vcol = true; rg.tex = Tex.ring(); rg.blend = Mat.ADD; rg.depthWrite = false; rg.cull = false; rg.order = 5;
+        dRing = new Dyn(rg);
+        Mat cs = Mat.std(new Color(0.86f, 0.66f, 0.3f, 1)); cs.vcol = false; cs.rough = 0.3f; cs.metal = 0.85f; cs.spec = 1f;
+        dCasing = new Dyn(cs);
         MAX = G.isMobile() ? 1600 : 2600;
         coreMat = new Mat(); coreMat.unshaded = true; coreMat.vcol = false; coreMat.tex = Tex.flameCore(); coreMat.blend = Mat.ADD; coreMat.depthWrite = false; coreMat.cull = false; coreMat.fog = false; coreMat.order = 6;
         MB b = new MB();
@@ -117,6 +139,7 @@ public final class FX {
             p.rot = R.nextFloat() * MathUtils.PI2;
             p.rotV = c.angVel > 0 ? rr(-c.angVel, c.angVel) * MathUtils.degreesToRadians : 0;
             p.ax = rr(-1, 1); p.ay = rr(-1, 1); p.az = rr(-1, 1);
+            p.tacc = 0; p.landed = false;
             parts.add(p);
         }
     }
@@ -126,10 +149,20 @@ public final class FX {
     static float[] grad(float... v) { return v; }
 
     // ---------- эффекты (fx.gd) ----------
+    static final Cfg EMBER_SMOKE = new Cfg().kind(K_SMOKE).vel(0.2f, 0.6f).damp(0.5f, 1f).grav(0, 1.5f, 0).scale(0.9f, 1.4f).curve(0.6f, 2.4f)
+            .ramp(0, 0.16f, 0.14f, 0.13f, 0.55f, 1, 0.35f, 0.33f, 0.32f, 0).life(1.6f);
+    static final Cfg EMBER_FIRE = new Cfg().vel(0, 0.5f).grav(0, 1, 0).scale(1.1f, 1.6f).curve(1f, 0.2f)
+            .ramp(0, 1, 0.75f, 0.3f, 1, 1, 1, 0.35f, 0.08f, 0).life(0.35f);
+
+    /** Взрыв: вспышка + свет, огненный шар, искры, ударная волна, горящие обломки, дым, пыль по земле. */
     public static void explosion(Vector3 pos, float s, boolean smoke) {
         float n = Math.min(2.2f, s);
-        Cfg flash = new Cfg().vel(0, 0).grav(0, 0, 0).scale(16 * s, 16 * s).curve(0.35f, 1f).ramp(0, 1, 0.96f, 0.85f, 1, 1, 1, 0.65f, 0.3f, 0).life(0.18f);
+        boolean mob = G.isMobile();
+        float fs = Math.min(s, 2.2f);
+        Cfg flash = new Cfg().vel(0, 0).grav(0, 0, 0).scale(16 * fs, 16 * fs).curve(0.35f, 1f).ramp(0, 1, 0.96f, 0.85f, 1, 1, 1, 0.65f, 0.3f, 0).life(0.18f);
         emit(flash, pos.x, pos.y, pos.z, 1);
+        // свет вспышки подсвечивает округу (землю, машину, дроны)
+        light(pos, 26f + 34f * n, 1f, 0.62f, 0.28f, (3.5f + 4f * n), 0.22f + 0.18f * n);
         Cfg fire = new Cfg().vel(3 * s, 11 * s).damp(5, 9).grav(0, 3, 0).scale(3 * s, 6 * s).curve(0.45f, 1f)
                 .ramp(0, 1, 0.95f, 0.75f, 1, 0.25f, 1, 0.62f, 0.2f, 0.95f, 0.6f, 0.75f, 0.25f, 0.06f, 0.5f, 1, 0.3f, 0.08f, 0.02f, 0).life(0.6f);
         emit(fire, pos.x, pos.y, pos.z, (int) (12 * n) + 5);
@@ -137,17 +170,134 @@ public final class FX {
         Cfg spark = new Cfg().vel(30 * sq, 70 * sq).damp(1, 1.5f).grav(0, -18, 0).scale(0.35f, 0.55f).curve(1f, 0.3f)
                 .ramp(0, 1, 0.9f, 0.6f, 1, 1, 1, 0.35f, 0.1f, 0).life(0.9f);
         emit(spark, pos.x, pos.y, pos.z, (int) (14 * n) + 4);
+        // ударная волна: быстро расширяющееся кольцо
+        if (s >= 0.6f) {
+            Cfg ring = new Cfg().kind(K_RING).vel(0, 0).grav(0, 0, 0).scale(18 * s, 18 * s).curve(0.08f, 1f)
+                    .ramp(0, 1, 0.92f, 0.8f, 0.9f, 0.4f, 1, 0.8f, 0.6f, 0.45f, 1, 0.8f, 0.6f, 0.4f, 0).life(0.32f + 0.08f * n);
+            emit(ring, pos.x, pos.y, pos.z, 1);
+        }
         if (smoke) {
             float g = rr(0.08f, 0.15f);
             Cfg sm = new Cfg().kind(K_SMOKE).vel(1.5f * s, 5 * s).damp(1.5f, 2.2f).grav(0, 2, 0).scale(4 * s, 6.5f * s).curve(0.5f, 2.6f)
                     .ramp(0, g * 0.8f, g * 0.7f, g * 0.6f, 0, 0.08f, g, g * 0.92f, g * 0.85f, 0.9f, 0.5f, g + 0.12f, g + 0.11f, g + 0.1f, 0.55f, 1, 0.42f, 0.41f, 0.4f, 0).life(4.5f);
             emit(sm, pos.x, pos.y, pos.z, (int) (8 * n) + 4);
         }
-        if (s >= 1f) {
-            Cfg db = new Cfg().kind(K_DEBRIS).vel(8, 22).grav(0, -20, 0).life(2f).dir(Vector3.Y, 70);
-            db.angVel = 400;
+        if (s >= 0.9f) {
+            // горящие обломки: тёмные куски с огнём и дымным хвостом, падают и могут поджечь землю
+            Cfg db = new Cfg().kind(K_DEBRIS).vel(8, 22).grav(0, -20, 0).life(3f).dir(Vector3.Y, 70);
+            db.angVel = 400; db.trail = EMBER_SMOKE; db.trailRate = mob ? 9 : 16; db.groundFire = 0.35f;
             emit(db, pos.x, pos.y, pos.z, (int) (5 * n) + 2);
+            Cfg em = new Cfg().vel(10, 26).grav(0, -16, 0).damp(0.3f, 0.6f).scale(0.9f, 1.4f).curve(1f, 0.5f)
+                    .ramp(0, 1, 0.85f, 0.45f, 1, 0.7f, 1, 0.45f, 0.1f, 1, 1, 0.6f, 0.15f, 0.02f, 0).life(1.8f).dir(Vector3.Y, 80);
+            em.trail = EMBER_FIRE; em.trailRate = mob ? 14 : 26; em.groundFire = 0.15f;
+            emit(em, pos.x, pos.y, pos.z, (int) (4 * n) + 2);
         }
+        // взрыв у земли: пыль кольцом, плоская волна по земле, пожар
+        if (height != null) {
+            float gh = height.h(pos.x, pos.z), above = pos.y - gh;
+            if (above < 3f + 2f * s) {
+                Cfg gr = new Cfg().kind(K_RING).vel(0, 0).grav(0, 0, 0).scale(26 * s, 26 * s).curve(0.1f, 1f)
+                        .ramp(0, 1, 0.8f, 0.55f, 0.7f, 1, 0.6f, 0.45f, 0.35f, 0).life(0.45f);
+                gr.flat = true;
+                emit(gr, pos.x, gh + 0.25f, pos.z, 1);
+                Cfg dust = new Cfg().kind(K_SMOKE).dir(Vector3.Y, 82).vel(9 * sq, 20 * sq).damp(10, 14).grav(0, 0.6f, 0).scale(3 * s, 5 * s).curve(0.6f, 2.2f)
+                        .ramp(0, 0.42f, 0.36f, 0.28f, 0.75f, 1, 0.5f, 0.45f, 0.38f, 0).life(2.6f);
+                emit(dust, pos.x, gh + 0.8f, pos.z, (int) (10 * n) + 4);
+                if (s >= 1f) groundFire(tv2.set(pos.x, gh, pos.z), MathUtils.clamp(s * 0.8f, 0.6f, 2.4f), rr(4f, 7f) + s);
+            }
+        }
+    }
+
+    static final Vector3 tv2 = new Vector3();
+
+    /** Пыль кольцом по земле (выстрел «Грома», падение тяжёлого). */
+    public static void groundDust(Vector3 at, float s) {
+        Cfg gr = new Cfg().kind(K_RING).vel(0, 0).grav(0, 0, 0).scale(22 * s, 22 * s).curve(0.15f, 1f)
+                .ramp(0, 0.55f, 0.45f, 0.33f, 0.5f, 1, 0.4f, 0.32f, 0.24f, 0).life(0.4f);
+        gr.flat = true;
+        emit(gr, at.x, at.y + 0.3f, at.z, 1);
+    }
+
+    // ---------- пожары на земле ----------
+    static int fires;
+    public static void groundFire(Vector3 at, float size, float dur) {
+        if (fires >= (G.isMobile() ? 5 : 9)) return;
+        Cfg f = new Cfg().kind(K_ADD).dir(Vector3.Y, 18).vel(1.5f, 4).grav(0, 2, 0).scale(1.4f * size, 2.4f * size).curve(1f, 0.25f)
+                .ramp(0, 0.9f, 0.45f, 0.12f, 0.55f, 0.5f, 0.85f, 0.28f, 0.05f, 0.45f, 1, 0.5f, 0.08f, 0.02f, 0).life(0.7f);
+        f.sphere = 0.8f * size;
+        Cfg sm = new Cfg().kind(K_SMOKE).dir(Vector3.Y, 12).vel(2, 4).grav(0, 1.2f, 0).scale(2.4f * size, 3.6f * size).curve(0.6f, 3f)
+                .ramp(0, 0.1f, 0.09f, 0.08f, 0.6f, 1, 0.32f, 0.31f, 0.3f, 0).life(3.5f);
+        Emitter e1 = new Emitter(); e1.fixed.set(at).add(0, 0.4f, 0); e1.cfg = f; e1.rate = 14; e1.killAt = dur; e1.fire = true;
+        Emitter e2 = new Emitter(); e2.fixed.set(at).add(0, 1.5f, 0); e2.cfg = sm; e2.rate = 5; e2.killAt = dur + 1f;
+        emitters.add(e1); emitters.add(e2);
+        fires++;
+    }
+
+    // ---------- свет ----------
+    static final class Light { float x, y, z, r, cr, cg, cb, pow, life, age; }
+    static final Array<Light> lights = new Array<>();
+
+    /** Временный точечный свет: позиция, радиус, цвет, сила, время жизни. */
+    public static void light(Vector3 p, float radius, float r, float g, float b, float pow, float life) {
+        if (lights.size >= 24) lights.removeIndex(0);
+        Light l = new Light();
+        l.x = p.x; l.y = p.y; l.z = p.z; l.r = radius; l.cr = r; l.cg = g; l.cb = b; l.pow = pow; l.life = life;
+        lights.add(l);
+    }
+
+    static final Light[] best = new Light[4];
+    static final float[] bestW = new float[4];
+
+    static void fillLights(Camera cam) {
+        if (env == null) return;
+        for (int i = 0; i < 4; i++) { best[i] = null; bestW[i] = 0; }
+        for (Light l : lights) {
+            float k = 1f - l.age / l.life;
+            float w = l.pow * k * k * l.r / (40f + cam.position.dst(l.x, l.y, l.z));
+            int at = -1;
+            for (int i = 0; i < 4; i++) if (w > bestW[i]) { at = i; break; }
+            if (at < 0) continue;
+            for (int i = 3; i > at; i--) { best[i] = best[i - 1]; bestW[i] = bestW[i - 1]; }
+            best[at] = l; bestW[at] = w;
+        }
+        int n = 0;
+        for (int i = 0; i < 4; i++) {
+            Light l = best[i];
+            if (l == null) { env.plc[i * 3] = env.plc[i * 3 + 1] = env.plc[i * 3 + 2] = 0; env.pl[i * 4 + 3] = 1; continue; }
+            float k = 1f - l.age / l.life; k = k * k * l.pow;
+            env.pl[i * 4] = l.x; env.pl[i * 4 + 1] = l.y; env.pl[i * 4 + 2] = l.z; env.pl[i * 4 + 3] = l.r;
+            env.plc[i * 3] = l.cr * k; env.plc[i * 3 + 1] = l.cg * k; env.plc[i * 3 + 2] = l.cb * k;
+            n++;
+        }
+        env.plN = n;
+    }
+
+    // ---------- свечения на один кадр (раскалённые стволы) ----------
+    static final com.badlogic.gdx.utils.FloatArray fglow = new com.badlogic.gdx.utils.FloatArray();
+
+    public static void frameGlow(Vector3 p, float size, float r, float g, float b, float a) {
+        fglow.add(p.x, p.y, p.z, size); fglow.add(r, g, b, a);
+    }
+
+    // ---------- гильзы ----------
+    static Cfg casingS, casingL;
+
+    /** Гильза: вылетает вбок-вверх из казённика, звенит о землю. */
+    public static void casing(Vector3 at, Vector3 side, boolean big) {
+        Cfg c = big ? casingL : casingS;
+        if (c == null) {
+            c = new Cfg().kind(K_CASING).vel(0, 0).grav(0, -24, 0).life(big ? 2.2f : 1.6f);
+            c.angVel = 900; c.bounce = true;
+            if (big) { c.bx = 0.17f; c.by = 0.17f; c.bz = 0.62f; casingL = c; } else { c.bx = 0.09f; c.by = 0.09f; c.bz = 0.34f; casingS = c; }
+        }
+        if (parts.size >= MAX) return;
+        P p = obtain();
+        p.c = c; p.x = at.x; p.y = at.y; p.z = at.z;
+        float v = rr(5f, 8f);
+        p.vx = side.x * v + rr(-1, 1); p.vy = rr(3.5f, 6.5f); p.vz = side.z * v + rr(-1, 1);
+        p.age = 0; p.life = c.life; p.sc = 1; p.damp = 0; p.rot = R.nextFloat() * MathUtils.PI2; p.rotV = rr(-c.angVel, c.angVel) * MathUtils.degreesToRadians;
+        p.ax = rr(-1, 1); p.ay = rr(-1, 1); p.az = rr(-1, 1); p.tacc = 0; p.landed = false;
+        parts.add(p);
     }
 
     public static void sparks(Vector3 pos, int n, Color col) {
@@ -198,6 +348,7 @@ public final class FX {
         public float killAt = -1;
         public float t;
         public Glow glowCfg;
+        public boolean fire;
     }
 
     static final class Glow { float size; float r, g, b; }
@@ -281,7 +432,7 @@ public final class FX {
         for (int i = emitters.size - 1; i >= 0; i--) {
             Emitter e = emitters.get(i);
             e.t += dt;
-            if (e.dead || (e.killAt > 0 && e.t > e.killAt)) { emitters.removeIndex(i); continue; }
+            if (e.dead || (e.killAt > 0 && e.t > e.killAt)) { if (e.fire) fires = Math.max(0, fires - 1); emitters.removeIndex(i); continue; }
             if (e.anchor != null && !attached(e.anchor)) { emitters.removeIndex(i); continue; }
             if (!e.emitting) continue;
             if (e.anchor != null) e.anchor.toGlobal(e.off, tv); else tv.set(e.fixed);
@@ -289,7 +440,12 @@ public final class FX {
             int n = (int) e.acc;
             e.acc -= n;
             for (int k = 0; k < n; k++) emit1(e.cfg, tv);
+            if (e.fire && R.nextFloat() < dt * 12f) {
+                float fade = e.killAt > 0 ? MathUtils.clamp((e.killAt - e.t) / 1.5f, 0, 1) : 1;
+                light(tv, 18f, 1f, 0.5f, 0.18f, rr(1.2f, 2.2f) * fade, 0.12f);
+            }
         }
+        for (int i = lights.size - 1; i >= 0; i--) { Light l = lights.get(i); l.age += dt; if (l.age >= l.life) lights.removeIndex(i); }
         // частицы
         for (int i = parts.size - 1; i >= 0; i--) {
             P p = parts.get(i);
@@ -303,9 +459,27 @@ public final class FX {
                     float k = ns / sp; p.vx *= k; p.vy *= k; p.vz *= k;
                 }
             }
+            if (p.landed) continue;
             p.vx += c.grav.x * dt; p.vy += c.grav.y * dt; p.vz += c.grav.z * dt;
             p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
             p.rot += p.rotV * dt;
+            if (c.trail != null) {
+                p.tacc += dt * c.trailRate * (1f - p.age / p.life);
+                while (p.tacc >= 1f) { p.tacc -= 1f; tv.set(p.x, p.y, p.z); emit1(c.trail, tv); }
+            }
+            if ((c.bounce || c.groundFire > 0 || c.kind == K_DEBRIS) && height != null && p.vy < 0) {
+                float gh = height.h(p.x, p.z);
+                if (p.y < gh + 0.05f) {
+                    p.y = gh + 0.05f;
+                    if (c.bounce && p.vy < -2.5f) { p.vy = -p.vy * 0.32f; p.vx *= 0.55f; p.vz *= 0.55f; p.rotV *= 0.5f; }
+                    else if (c.bounce) { p.vx = p.vy = p.vz = 0; p.rotV = 0; p.landed = true; }
+                    else {
+                        if (c.groundFire > 0 && R.nextFloat() < c.groundFire) groundFire(tv.set(p.x, gh, p.z), rr(0.45f, 0.8f), rr(3f, 6f));
+                        if (c.kind == K_DEBRIS) { p.vx = p.vy = p.vz = 0; p.rotV = 0; p.landed = true; p.life = Math.min(p.life, p.age + 4f); }
+                        else { p.age = p.life; }
+                    }
+                }
+            }
         }
         for (int i = trails.size - 1; i >= 0; i--) if (!trails.get(i).update(dt)) trails.removeIndex(i);
     }
@@ -349,22 +523,29 @@ public final class FX {
 
     /** Заполнить динамические буферы частиц для кадра. */
     public static void fill(Camera cam) {
-        dAdd.clear(); dSmoke.clear(); dDebris.clear();
+        dAdd.clear(); dSmoke.clear(); dDebris.clear(); dRing.clear(); dCasing.clear();
+        fillLights(cam);
         right.set(cam.direction).crs(cam.up).nor();
         up.set(right).crs(cam.direction).nor();
         for (int i = 0; i < parts.size; i++) {
             P p = parts.get(i);
             Cfg c = p.c;
             float t = p.age / p.life;
-            if (c.kind == K_DEBRIS) {
-                tm.idt().translate(p.x, p.y, p.z).rotateRad(tv.set(p.ax, p.ay, p.az).nor(), p.rot).scale(0.35f, 0.2f, 0.3f);
-                dDebris.prim(Dyn.BOX, tm, 1, 1, 1, 1);
+            if (c.kind == K_DEBRIS || c.kind == K_CASING) {
+                tm.idt().translate(p.x, p.y, p.z).rotateRad(tv.set(p.ax, p.ay, p.az).nor(), p.rot).scale(c.bx, c.by, c.bz);
+                (c.kind == K_CASING ? dCasing : dDebris).prim(Dyn.BOX, tm, 1, 1, 1, 1);
                 continue;
             }
             rampAt(c.ramp, t, col);
             float sz = p.sc * MathUtils.lerp(c.cA, c.cB, t);
             tv.set(p.x, p.y, p.z);
-            (c.kind == K_SMOKE ? dSmoke : dAdd).billboard(tv, sz, right, up, col[0], col[1], col[2], col[3], c.kind == K_SMOKE ? p.rot : 0);
+            if (c.kind == K_RING) {
+                if (c.flat) flatQuad(dRing, tv, sz, col[0], col[1], col[2], col[3]);
+                else dRing.billboard(tv, sz, right, up, col[0], col[1], col[2], col[3], 0);
+                continue;
+            }
+            if (c.kind == K_SMOKE) dSmoke.billboard(tv, sz, right, up, col[0] * smokeLum, col[1] * smokeLum, col[2] * smokeLum, col[3], p.rot);
+            else dAdd.billboard(tv, sz, right, up, col[0], col[1], col[2], col[3], 0);
         }
         // свечения горелок-хвостов
         for (int i = 0; i < emitters.size; i++) {
@@ -381,8 +562,21 @@ public final class FX {
             float k = f.scl.x;
             dAdd.billboard(tv, 2.6f * k, right, up, 1f, 0.72f * 0.85f, 0.42f * 0.85f, 0.85f, 0);
         }
+        for (int i = 0; i < fglow.size; i += 8) {
+            float[] g = fglow.items;
+            tv.set(g[i], g[i + 1], g[i + 2]);
+            dAdd.billboard(tv, g[i + 3], right, up, g[i + 4], g[i + 5], g[i + 6], g[i + 7], 0);
+        }
+        fglow.clear();
         SmokeTrail.dyn.clear();
         for (int i = 0; i < trails.size; i++) trails.get(i).fill(cam);
+    }
+
+    static void flatQuad(Dyn d, Vector3 p, float size, float r, float g, float b, float a) {
+        float h = size * 0.5f;
+        float ax = p.x - h, az = p.z - h, bx = p.x + h, bz = p.z + h, y = p.y;
+        d.vert(ax, y, az, 0, 1, 0, r, g, b, a, 0, 0); d.vert(bx, y, az, 0, 1, 0, r, g, b, a, 1, 0); d.vert(bx, y, bz, 0, 1, 0, r, g, b, a, 1, 1);
+        d.vert(ax, y, az, 0, 1, 0, r, g, b, a, 0, 0); d.vert(bx, y, bz, 0, 1, 0, r, g, b, a, 1, 1); d.vert(ax, y, bz, 0, 1, 0, r, g, b, a, 0, 1);
     }
 
     public static void clear() {
@@ -391,6 +585,10 @@ public final class FX {
         emitters.clear();
         trails.clear();
         flames.clear();
+        lights.clear();
+        fglow.clear();
+        fires = 0;
+        if (env != null) env.plN = 0;
     }
 
     private FX() { }
