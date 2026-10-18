@@ -346,6 +346,17 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             {"fx_boss", "1.3"}, {"fx_boss2", "1.2"}, {"fx_after", "2"}, {"fx_dusk", "1"}, {"fx_night", "1.5"}, {"fx_storm", "1.2"}, {"fx_bolt", "0.1"},
             {"fx_nboom", "0.15"}, {"end", "0"}};
 
+    /** Проверка объектов кампании: плотина, колонна, подстанция, радар — камера смотрит на объект. */
+    public static final String[][] SEQ_OBJ = {
+            {"menu", "3"}, {"o_dam", "3"}, {"o_convoy", "4"}, {"o_sub", "3"}, {"o_radar", "3"}, {"end", "0"}};
+
+    void lookObj() {
+        if (game.obj == null) return;
+        Vector3 d = new Vector3(game.obj.aim).sub(game.camPos);
+        game.aimYaw = MathUtils.atan2(-d.x, -d.z);
+        game.aimPitch = MathUtils.clamp((float) Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)), -0.05f, 0.6f);
+    }
+
     Vector3 ahead(float d, float up) {
         Vector3 p = new Vector3(game.camPos).mulAdd(game.aimDir.cpy().set(game.aimDir.x, 0, game.aimDir.z).nor(), d);
         p.y = world.height(p.x, p.z) + up;
@@ -355,6 +366,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     void shots(float dt) {
         shotT += dt;
         String[][] seq = SEQ;
+        if (seq == SEQ_OBJ && shotStep > 0 && game.obj != null) { botOn = false; game.firing = false; lookObj(); }
         if (shotStep >= seq.length) return;
         String name = seq[shotStep][0];
         float wait = Float.parseFloat(seq[shotStep][1]);
@@ -403,6 +415,10 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "djoin": ui.debugDuelJoin("127.0.0.1"); break;
             case "dj2": duel.sendPick("gunship"); break;
             case "dh2": duel.begin(); break;
+            case "o_dam": G.SV.tut = true; ui.debugLaunch("2-1"); break;
+            case "o_convoy": game.quitBattle(); ui.debugLaunch("2-4"); break;
+            case "o_sub": game.quitBattle(); ui.debugLaunch("5-2"); break;
+            case "o_radar": game.quitBattle(); ui.debugLaunch("4-2"); break;
             case "fx_fire": G.SV.night = System.getenv("SN_NIGHT") != null; G.SV.ab.put("salvo", true); ui.launch("endless"); break;
             case "fx_boom": botOn = false; game.firing = false; game.aimYaw = 0; game.aimPitch = 0.08f; game.explosion(ahead(55, 1.5f), 2f); break;
             case "fx_heat": game.heat = 0.97f; game.overheated = true; game.firing = false; game.aimPitch = 0.12f; break;

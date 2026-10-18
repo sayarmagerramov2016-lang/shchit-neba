@@ -14,11 +14,23 @@ public final class Objs {
     static Color c(String h) { return G.hex(h); }
 
     static final java.util.Map<String, Mesh3[]> cache = new java.util.HashMap<>();
+    static final java.util.Map<String, Node3> tplCache = new java.util.HashMap<>();
 
     public static Obj make(String kind) {
         if (kind.equals("radar")) {
             SModels.Target t = SModels.target("radar", "dusk");
             Obj o = new Obj(); o.g = t.g; o.spin = t.spin;
+            return o;
+        }
+        // 3.3.1: плотина, подстанция и грузовики колонны — новые модели из Targets
+        if (kind.equals("dam") || kind.equals("sub") || kind.equals("truck")) {
+            String key = kind.equals("truck") ? "truck" + (Targets.truckVar % 3) : kind;
+            Node3 tpl = tplCache.get(key);
+            if (tpl == null) {
+                tpl = kind.equals("dam") ? Targets.dam() : kind.equals("sub") ? Targets.substation() : Targets.convoyTruck();
+                tplCache.put(key, tpl);
+            } else if (kind.equals("truck")) Targets.truckVar++;
+            Obj o = new Obj(); o.g = new Node3(); o.g.add(tpl.cloneTree());
             return o;
         }
         Mesh3[] ms = cache.get(kind);

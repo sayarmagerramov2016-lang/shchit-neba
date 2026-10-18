@@ -34,6 +34,8 @@ public final class Studio {
         for (String v : G.VEHS) all.add(new Item("veh", v, D.get("VEHICLES").get(v).getString("name", v)));
         String[][] tg = {{"depot", "Склад"}, {"fuel", "Бензохранилище"}, {"radar", "Радар"}, {"hq", "Штаб"}, {"ew", "Станция РЭБ"}};
         for (String[] k : tg) all.add(new Item("target", k[0], k[1]));
+        String[][] ob = {{"truck", "Грузовик колонны"}, {"truck", "Грузовик колонны"}, {"truck", "Грузовик колонны"}, {"sub", "Подстанция"}, {"dam", "Плотина"}};
+        for (String[] k : ob) all.add(new Item("obj", k[0], k[1]));
         for (Item it : all) {
             if (only == null) { items.add(it); continue; }
             for (String o : only.split(",")) if (o.trim().equals(it.id)) items.add(it);

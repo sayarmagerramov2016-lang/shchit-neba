@@ -620,6 +620,242 @@ public final class Targets {
         k.l.box(0.22f, 0.18f, 0.03f, c("fff3d0"), -1.0f, top + 0.2f, -1.53f);
     }
 
+
+    // ================= объекты кампании (3.3.1) =================
+
+    /** Тентованный кузов: борта, дуги и брезент. */
+    static void tentBody(K k, float y0, float z0, float z1, Color tarp) {
+        float w = 2.45f, L = z1 - z0, zc = (z0 + z1) / 2;
+        Color side = c("4a5532");
+        k.b.box(w, 0.08f, L, DSTEEL, 0, y0, zc);
+        for (float s : S2) k.b.box(0.06f, 0.6f, L, side, s * (w / 2 - 0.03f), y0 + 0.34f, zc);
+        k.b.box(w, 0.6f, 0.06f, side, 0, y0 + 0.34f, z1 - 0.03f);
+        // брезент: прямые бока и крыша со скосами
+        k.b.extrude(new float[][]{{-w / 2, 0}, {w / 2, 0}, {w / 2, 1.35f}, {w / 2 - 0.25f, 1.6f}, {-w / 2 + 0.25f, 1.6f}, {-w / 2, 1.35f}}, L - 0.1f, tarp, 0, y0 + 0.62f, zc, 0, PI / 2, 0);
+        Color dk = new Color(tarp).mul(0.8f, 0.8f, 0.8f, 1);
+        int n = (int) (L / 1.1f);
+        for (int i = 0; i <= n; i++) {
+            float z = z0 + 0.1f + i * (L - 0.2f) / n;
+            k.b.extrude(new float[][]{{-w / 2 - 0.02f, 1.3f}, {-w / 2 - 0.02f, 1.36f}, {-w / 2 + 0.25f, 1.63f}, {w / 2 - 0.25f, 1.63f}, {w / 2 + 0.02f, 1.36f}, {w / 2 + 0.02f, 1.3f}, {w / 2 - 0.24f, 1.57f}, {-w / 2 + 0.24f, 1.57f}},
+                    0.06f, dk, 0, y0 + 0.62f, z, 0, PI / 2, 0);
+        }
+        for (float s : S2) for (int i = 0; i < 6; i++) k.m.box(0.03f, 0.18f, 0.03f, BLK, s * (w / 2 + 0.01f), y0 + 0.7f, z0 + 0.3f + i * (L - 0.6f) / 5);
+        k.b.box(w - 0.1f, 1.3f, 0.03f, dk, 0, y0 + 1.3f, z1 - 0.01f);
+    }
+
+    /** Цистерна-бензовоз: эллиптический бак, переливные отсеки, лестница, «ОГНЕОПАСНО». */
+    static void tankBody(K k, float y0, float z0, float z1) {
+        float L = z1 - z0, zc = (z0 + z1) / 2;
+        Color tc = c("8d9474");
+        k.m.box(1.4f, 0.2f, L, DSTEEL, 0, y0 + 0.05f, zc);
+        k.b.cyl(1.1f, 1.1f, L - 0.4f, 28, tc, 0, y0 + 1.1f, zc, PI / 2, 0, 0);
+        for (float s : S2) k.b.sph(1.1f, new Color(tc).mul(0.94f, 0.94f, 0.94f, 1), 0, y0 + 1.1f, zc + s * (L / 2 - 0.2f), 1, 1, 0.25f);
+        for (int i = 0; i < 3; i++) {
+            float z = z0 + 1.0f + i * (L - 2f) / 2f;
+            k.m.cyl(0.28f, 0.28f, 0.18f, 14, STEEL, 0, y0 + 2.25f, z);
+            k.m.cyl(1.13f, 1.13f, 0.05f, 28, DSTEEL, 0, y0 + 1.1f, z, PI / 2, 0, 0);
+        }
+        k.m.box(0.5f, 0.04f, L - 0.6f, DSTEEL, 0.55f, y0 + 2.22f, zc);
+        for (float s : S2) {
+            k.b.box(0.02f, 0.3f, 1.4f, RED, s * 1.1f, y0 + 1.1f, zc);
+            k.b.box(0.025f, 0.08f, 1.2f, WHITE, s * 1.11f, y0 + 1.1f, zc);
+            k.m.box(0.4f, 0.4f, L - 0.6f, OLV_D, s * 0.95f, y0 + 0.3f, zc);
+        }
+        for (float e : new float[]{-0.25f, 0.25f}) k.m.seg(V(e, 0.5f, z1 + 0.15f), V(e, y0 + 2.2f, z1 - 0.2f), 0.025f, 0.025f, 6, DSTEEL);
+        for (int i = 0; i < 6; i++) k.m.box(0.5f, 0.03f, 0.05f, DSTEEL, 0, 0.6f + i * (y0 + 1.5f) / 6f, z1 + 0.12f - i * 0.05f);
+        k.m.cyl(0.08f, 0.08f, 0.6f, 8, DSTEEL, 0.6f, y0 - 0.1f, z1 - 0.1f, PI / 2, 0, 0);
+    }
+
+    static int truckVar;
+
+    /** Грузовик колонны: по очереди тентованный, бензовоз, с кунгом. */
+    public static Node3 convoyTruck() {
+        boolean hq0 = MB.hq; MB.hq = false;
+        K k = new K();
+        int v = truckVar++ % 3;
+        Color body = c("4f5a36");
+        float fy = truck(k, -4.0f, 4.0f, body);
+        if (v == 0) tentBody(k, fy + 0.15f, -1.6f, 4.0f, c("5d6640"));
+        else if (v == 1) tankBody(k, fy + 0.1f, -1.6f, 4.0f);
+        else kung(k, fy + 0.15f, -1.55f, 4.0f, 2.1f, body);
+        // запасное колесо за кабиной, номер-полоса на двери
+        truckWheel(k, 0.6f, fy + 0.62f, -2.15f, 0.56f, 0.38f, 1);
+        Node3 n = k.node();
+        MB.hq = hq0;
+        return n;
+    }
+
+    /** Бетонная гравитационная плотина 220 м: секции, водосброс с затворами и струями, ГЭС у подножия, кран на гребне. */
+    public static Node3 dam() {
+        boolean hq0 = MB.hq; MB.hq = false;
+        K k = new K();
+        MB b = k.b, m = k.m;
+        Color con = c("9a968c"), conD = c("7f7b72"), conL = c("aaa69b");
+        float Wd = 220f, base = -4f, H = 28f;
+        // тело: верховая грань почти вертикальная (−Z, к воде), низовая — откос к игроку (+Z)
+        float[][] prof = {{6, 0}, {-12, 0}, {-3.5f, H - 3}, {-3.5f, H}, {4, H}, {5, H - 3}};
+        b.extrude(prof, Wd, con, 0, base, 0);
+        // секционные швы на низовой грани (каждые 15 м), полосы потёков
+        for (int i = -7; i <= 7; i++) {
+            float x = i * 15f;
+            b.box(0.25f, H * 1.04f, 0.3f, conD, x, base + H / 2, 4f + (H / 2) * 0.0f + 0.0f, -0.3f, 0, 0);
+        }
+        for (int i = 0; i < 18; i++) {
+            float x = -105 + i * 12.3f;
+            b.box(1.2f + (i % 3) * 0.5f, H * 0.7f, 0.1f, i % 2 == 0 ? c("85827a") : c("8e8a80"), x, base + H * 0.45f, 3.6f + 0.0f, -0.31f, 0, 0);
+        }
+        // водосброс в центре: 3 пролёта между быками, сегментные затворы, вода по откосу
+        float sw = 30f;
+        for (int i = 0; i <= 3; i++) {
+            float x = -sw / 2 + i * sw / 3;
+            b.box(2.2f, 8f, 11f, conL, x, base + H + 2f, 0.5f);
+            b.box(2.6f, 0.8f, 11.4f, conD, x, base + H + 6.2f, 0.5f);
+        }
+        for (int i = 0; i < 3; i++) {
+            float x = -sw / 2 + (i + 0.5f) * sw / 3;
+            m.box(sw / 3 - 2.2f, 5f, 0.4f, c("4a5560"), x, base + H + 2.2f, -2.5f);
+            for (int j = 0; j < 4; j++) m.box(sw / 3 - 2.2f, 0.2f, 0.25f, DSTEEL, x, base + H + 0.6f + j * 1.25f, -2.75f);
+            // струя по откосу и пена внизу
+            k.l.box(sw / 3 - 2.6f, 0.15f, 27f, c("9fc8e0"), x, base + H * 0.5f - 0.6f, 8.2f, -1.08f, 0, 0);
+            k.l.box(sw / 3 - 2.6f, 1.2f, 6f, c("e6f2f8"), x, base + 0.6f, 16f);
+        }
+        // служебный мост над водосбросом и машинные будки затворов
+        b.box(sw + 2.4f, 0.6f, 4f, conD, 0, base + H + 6.7f, 0.5f);
+        for (int i = 0; i < 3; i++) {
+            float x = -sw / 2 + (i + 0.5f) * sw / 3;
+            b.box(4f, 2.6f, 3f, c("b9b2a0"), x, base + H + 8.3f, 0.5f);
+            b.extrude(new float[][]{{-1.7f, 0}, {1.7f, 0}, {0, 0.8f}}, 4.2f, c("6a4a3a"), x, base + H + 9.6f, 0.5f);
+            k.g.box(1.2f, 0.7f, 0.05f, GLASS, x, base + H + 8.6f, 2.03f);
+        }
+        // гребень: дорога, парапеты-ограждения, фонари
+        b.box(Wd, 0.2f, 6.6f, c("4c4c48"), 0, base + H + 0.1f, 0.25f);
+        for (float zz : new float[]{-3.4f, 3.9f}) {
+            b.box(Wd, 0.9f, 0.3f, conL, 0, base + H + 0.55f, zz);
+            for (int i = -9; i <= 9; i++) if (Math.abs(i * 11f) > sw / 2 + 3) {
+                m.cyl(0.12f, 0.15f, 6f, 8, DSTEEL, i * 11f, base + H + 3.5f, zz);
+                m.seg(V(i * 11f, base + H + 6.4f, zz), V(i * 11f, base + H + 6.6f, zz + (zz > 0 ? -1.2f : 1.2f)), 0.08f, 0.08f, 6, DSTEEL);
+                k.l.box(0.6f, 0.2f, 0.4f, c("fff0c0"), i * 11f, base + H + 6.5f, zz + (zz > 0 ? -1.3f : 1.3f));
+            }
+        }
+        // козловой кран на гребне
+        float cx = -48f;
+        for (float e : new float[]{-6f, 6f}) for (float zz : new float[]{-2.8f, 3.3f}) m.box(0.6f, 12f, 0.6f, YEL, cx + e, base + H + 6.2f, zz);
+        for (float zz : new float[]{-2.8f, 3.3f}) m.box(14f, 1.2f, 0.8f, YEL, cx, base + H + 12.4f, zz);
+        m.box(3f, 2f, 7f, c("c89a20"), cx + 2f, base + H + 11.6f, 0.25f);
+        for (int i = 0; i < 6; i++) m.seg(V(cx - 6f + i * 2.4f, base + H + 0.6f, -2.8f), V(cx - 4.8f + i * 2.4f, base + H + 11.8f, -2.8f), 0.12f, 0.12f, 5, YEL);
+        // ГЭС у подножия справа: машзал с окнами, трансформаторы, отводящий канал
+        float px = 55f, pz = 14f;
+        b.box(36f, 13f, 12f, c("b5ad9a"), px, base + 6.5f, pz);
+        b.box(36.6f, 1f, 12.6f, conD, px, base + 13.5f, pz);
+        for (int i = 0; i < 8; i++) k.g.box(2.6f, 6f, 0.1f, GLASS, px - 15.5f + i * 4.4f, base + 7.5f, pz + 6.02f);
+        for (int i = 0; i < 9; i++) b.box(0.5f, 12f, 0.3f, c("a39b88"), px - 17.6f + i * 4.4f, base + 6.5f, pz + 6.1f);
+        b.box(30f, 1.5f, 0.2f, c("2a4a8a"), px, base + 11.8f, pz + 6.1f);
+        for (int i = 0; i < 3; i++) {
+            float tx = px - 12f + i * 12f, tz = pz + 11f;
+            b.box(4f, 3.5f, 3f, c("6a7060"), tx, base + 1.75f + 1f, tz);
+            for (int f = 0; f < 6; f++) for (float e : S2) m.box(0.1f, 2.6f, 2.2f, DSTEEL, tx + e * (2.1f + f * 0.0f), base + 2.6f, tz - 1.2f + f * 0.45f);
+            for (int u = 0; u < 3; u++) m.cyl(0.18f, 0.25f, 2.2f, 8, c("8a5a3a"), tx - 1.2f + u * 1.2f, base + 5.6f, tz);
+            m.cyl(0.6f, 0.6f, 3f, 14, c("6a7060"), tx, base + 5.2f, tz + 1.2f, 0, 0, PI / 2);
+        }
+        k.l.box(30f, 0.6f, 14f, c("2f6a8a"), px, base + 0.4f, pz + 16f);
+        Node3 n = k.node();
+        MB.hq = hq0;
+        return n;
+    }
+
+    /** Подстанция: гравийная площадка, ограда, 3 трансформатора с радиаторами и вводами, порталы с шинами, ОПУ. */
+    public static Node3 substation() {
+        boolean hq0 = MB.hq; MB.hq = false;
+        K k = new K();
+        MB b = k.b, m = k.m;
+        Random R = new Random(91);
+        Color gal = c("8c9296"), porc = c("6e4a34"), tr = c("6b7562");
+        b.box(34f, 0.2f, 18f, c("8a877e"), 0, 0.1f, 0);
+        // ограда: столбы и сетка, ворота спереди
+        for (int i = 0; i <= 17; i++) for (float s : S2) {
+            float x = -17f + i * 2f;
+            m.cyl(0.06f, 0.06f, 2.4f, 6, gal, x, 1.2f, s * 9f);
+        }
+        for (int i = 0; i <= 9; i++) for (float s : S2) m.cyl(0.06f, 0.06f, 2.4f, 6, gal, s * 17f, 1.2f, -9f + i * 2f);
+        // сетка-рабица: частые горизонтальные проволоки и колючка поверху (сквозь неё видно оборудование)
+        for (float s : S2) {
+            for (int i = 0; i < 9; i++) {
+                float y = 0.15f + i * 0.27f;
+                m.box(34f, 0.025f, 0.025f, gal, 0, y, s * 9f);
+                m.box(0.025f, 0.025f, 18f, gal, s * 17f, y, 0);
+            }
+            for (int i = 0; i < 3; i++) {
+                m.box(34f, 0.02f, 0.02f, c("5a5e60"), 0, 2.45f + i * 0.12f, s * (9f + i * 0.1f));
+                m.box(0.02f, 0.02f, 18f, c("5a5e60"), s * (17f + i * 0.1f), 2.45f + i * 0.12f, 0);
+            }
+        }
+        for (int i = 0; i < 4; i++) { b.box(0.7f, 0.5f, 0.03f, YEL, -12f + i * 8f, 1.6f, 9.05f); b.box(0.4f, 0.08f, 0.032f, BLK, -12f + i * 8f, 1.6f, 9.06f); }
+        // трансформаторы
+        for (int i = 0; i < 3; i++) {
+            float x = -9f + i * 9f, z = 2.5f;
+            b.box(5.6f, 0.5f, 3.6f, CONC_D, x, 0.45f, z);
+            b.box(3.6f, 3.0f, 2.6f, tr, x, 2.2f, z);
+            b.box(3.8f, 0.2f, 2.8f, new Color(tr).mul(0.85f, 0.85f, 0.85f, 1), x, 3.75f, z);
+            for (float s : S2) for (int f = 0; f < 7; f++) m.box(0.06f, 2.4f, 0.9f, DSTEEL, x + s * (1.9f + f * 0.0f) + s * f * 0.0f, 2.1f, z - 1.35f + f * 0.45f);
+            for (float s : S2) b.box(0.6f, 2.5f, 2.9f, new Color(tr).mul(0.9f, 0.9f, 0.9f, 1), x + s * 2.25f, 2.1f, z);
+            // расширительный бак, газовое реле, вводы ВН из «тарелочек»
+            b.cyl(0.45f, 0.45f, 2.6f, 14, tr, x, 4.6f, z + 1.0f, 0, 0, PI / 2);
+            m.seg(V(x, 3.85f, z + 0.6f), V(x, 4.4f, z + 1.0f), 0.06f, 0.06f, 6, DSTEEL);
+            for (int u = 0; u < 3; u++) {
+                float bx = x - 1.1f + u * 1.1f;
+                for (int d = 0; d < 8; d++) m.cyl(0.24f, 0.24f, 0.08f, 12, porc, bx, 4.1f + d * 0.22f, z - 0.4f);
+                m.cyl(0.12f, 0.12f, 1.9f, 8, porc, bx, 4.9f, z - 0.4f);
+                m.cyl(0.08f, 0.08f, 0.3f, 6, gal, bx, 5.95f, z - 0.4f);
+            }
+            b.box(1.2f, 0.05f, 2.2f, c("2a2620"), x + 2.0f, 0.22f, z + 0.3f); // пятно масла
+        }
+        // порталы: решётчатые стойки и траверса, гирлянды изоляторов, провода к вводам
+        for (float z : new float[]{-4.5f}) {
+            for (float x : new float[]{-15f, 15f}) {
+                for (float e : S2) for (float f : S2) m.seg(V(x + e * 0.6f, 0.2f, z + f * 0.6f), V(x + e * 0.25f, 11f, z + f * 0.25f), 0.07f, 0.07f, 5, gal);
+                for (int h = 1; h < 8; h++) m.box(1.0f - h * 0.08f, 0.06f, 0.06f, gal, x, h * 1.4f, z + 0.5f - h * 0.04f);
+            }
+            m.box(31f, 0.6f, 0.6f, gal, 0, 11f, z);
+            for (int i = 0; i < 12; i++) m.seg(V(-14.5f + i * 2.6f, 10.7f, z), V(-13.2f + i * 2.6f, 11.3f, z), 0.04f, 0.04f, 4, gal);
+            for (int i = 0; i < 3; i++) for (int u = 0; u < 3; u++) {
+                float x = -9f + i * 9f - 1.1f + u * 1.1f;
+                for (int d = 0; d < 6; d++) m.cyl(0.16f, 0.16f, 0.06f, 10, porc, x, 10.6f - d * 0.18f, z);
+                m.seg(V(x, 9.5f, z), V(x, 6.0f, 2.1f), 0.03f, 0.03f, 4, BLK);
+                m.seg(V(x, 9.5f, z), V(-9f + i * 9f + 2.5f * (u - 1), 13.6f, -20f), 0.03f, 0.03f, 4, BLK);
+            }
+        }
+        // опоры уходящих ЛЭП за оградой: стойка с траверсой и гирляндами
+        for (int i = 0; i < 3; i++) {
+            float x = -9f + i * 9f, z = -20f;
+            for (float e : S2) m.seg(V(x + e * 1.4f, 0, z), V(x + e * 0.5f, 14f, z), 0.12f, 0.08f, 6, gal);
+            m.box(6.5f, 0.35f, 0.35f, gal, x, 14f, z);
+            for (int h = 1; h < 6; h++) m.box(2.6f - h * 0.3f, 0.06f, 0.06f, gal, x, h * 2.3f, z);
+            for (int u = 0; u < 3; u++) for (int d = 0; d < 4; d++) m.cyl(0.14f, 0.14f, 0.06f, 8, porc, x + 2.5f * (u - 1), 13.8f - d * 0.16f, z);
+        }
+        // разъединители на опорах
+        for (int i = 0; i < 6; i++) {
+            float x = -12f + i * 4.8f, z = -7f;
+            b.box(0.6f, 2.2f, 0.6f, CONC, x, 1.1f, z);
+            for (int d = 0; d < 5; d++) m.cyl(0.18f, 0.18f, 0.07f, 10, porc, x, 2.4f + d * 0.18f, z);
+            m.box(1.4f, 0.08f, 0.1f, gal, x, 3.4f, z, 0, 0, 0.3f);
+        }
+        // ОПУ — пункт управления с дверью и окнами
+        float ox = 12.5f, oz = 6.4f;
+        b.box(6f, 3.2f, 3.6f, c("b9b29c"), ox, 1.8f, oz);
+        b.box(6.4f, 0.25f, 4f, c("4a4a46"), ox, 3.5f, oz);
+        b.box(0.9f, 2.0f, 0.05f, c("4f5640"), ox - 1.8f, 1.2f, oz - 1.82f);
+        for (int i = 0; i < 2; i++) k.g.box(1.0f, 0.8f, 0.05f, GLASS, ox + 0.2f + i * 1.6f, 2.2f, oz - 1.82f);
+        k.l.box(0.25f, 0.12f, 0.12f, c("fff0c0"), ox - 1.8f, 2.4f, oz - 1.86f);
+        // кабельные лотки
+        for (int i = 0; i < 3; i++) b.box(0.6f, 0.15f, 3.6f, CONC_D, -9f + i * 9f, 0.25f, 5.6f);
+        b.box(22f, 0.15f, 0.6f, CONC_D, 0.5f, 0.25f, 7.4f);
+        // мешки у ОПУ
+        bagWall(b, ox, oz - 3f, 2.4f, PI * 0.7f, PI * 1.3f, 2, R);
+        Node3 n = k.node();
+        MB.hq = hq0;
+        return n;
+    }
+
     // ================= сборка =================
 
     /** Возвращает {узел, вращающаяся часть или null, r, hr}. */
