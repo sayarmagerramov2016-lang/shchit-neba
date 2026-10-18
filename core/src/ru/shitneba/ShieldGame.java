@@ -25,6 +25,10 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     public static String shotDir;
     /** Отладка: принудительно выбранная машина. */
     public static String forceVeh;
+    /** Отладка: «фотостудия» всех моделей (аргумент models). */
+    public static boolean studioMode;
+    Studio studio;
+    int stIdx, stView;
 
     Renderer rend;
     World world;
@@ -91,6 +95,13 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         if (report != null) ui.showReport(report);
         else if (shotDir == null) ui.checkDaily();
         if (shotDir != null) { botOn = true; G.SV.tut = true; }
+        if (studioMode) {
+            botOn = false;
+            studio = new Studio();
+            roots.removeValue(game.root, true); roots.removeValue(strike.root3, true);
+            roots.add(studio.root);
+            studio.show(0, world);
+        }
         BlackBox.tick();
         BlackBox.hold = false;
     }
@@ -263,6 +274,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         game.step(gdt);
         BlackBox.mark("рой / камера");
         if (strike.active) strike.update(dt);
+        else if (studio != null) studio.aim(cam, stView);
         else game.updateCamera(dt);
         warmStep();
         BlackBox.mark("мир");
@@ -284,9 +296,10 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         rend.render(roots, dyns);
         if (strike.active && ui.panel.isEmpty()) fpv.draw(strike.noise(), strike.T, strike.hitT, strike.camMode == 0 && strike.st.equals("fly") ? 1 : 0);
         BlackBox.mark("отрисовка интерфейса");
-        ui.render();
+        if (studio == null) ui.render();
         BlackBox.mark("кадр");
-        if (shotDir != null) shots(dt);
+        if (studio != null) studioShots(dt);
+        else if (shotDir != null) shots(dt);
     }
 
     // ---------- автопилот для проверок ----------
@@ -403,6 +416,19 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "fx_bolt": world.debugBolt(cam.position); break;
             case "fx_nboom": game.explosion(ahead(45, 2f), 2f); break;
             default: break;
+        }
+    }
+
+    void studioShots(float dt) {
+        shotT += dt;
+        if (shotT < 0.5f) return;
+        shotT = 0;
+        Studio.Item it = studio.items.get(stIdx);
+        save(shotDir + "/" + String.format("%02d", stIdx) + "_" + it.group + "_" + it.id + "_" + stView + ".png");
+        if (++stView > 2) {
+            stView = 0;
+            if (++stIdx >= studio.items.size) { Gdx.app.exit(); return; }
+            studio.show(stIdx, world);
         }
     }
 
