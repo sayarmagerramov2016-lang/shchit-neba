@@ -86,7 +86,7 @@ public class UI implements GameUI, InputProcessor {
 
     public UI(Game g, Draw d, Host host) {
         this.g = g; this.d = d; this.host = host;
-        DESK = !G.isMobile();
+        DESK = !G.isMobile() && System.getenv("SN_PHONE") == null; // SN_PHONE=1 — интерфейс как на телефоне (для скриншотов магазина)
         String[][] bt = {{"endless", "menu"}, {"garage", "menu"}, {"shop", "menu"}, {"settings", "menu"}, {"about", "menu"},
                 {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}};
         for (String[] b : bt) backTo.put(b[0], b[1]);

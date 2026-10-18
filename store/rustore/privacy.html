@@ -1,0 +1,71 @@
+<title>Щит неба 3D — конфиденциальность</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=PT+Sans:wght@400;700&display=swap">
+<style>
+/* Строгий документ в цветах игры: тёмно-фиолетовое небо, золотой акцент щита. Одна колонка ~65 знаков. */
+:root{
+  --bg:#f6f4fa; --fg:#211c2e; --muted:#5d5670; --line:#ddd6ea; --accent:#b8720f; --card:#ffffff;
+  --display:"Russo One","Arial Black",sans-serif; --body:"PT Sans","Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15111f;--fg:#ece8f5;--muted:#a59fb8;--line:#2e2740;--accent:#f6b030;--card:#1d1829;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15111f;--fg:#ece8f5;--muted:#a59fb8;--line:#2e2740;--accent:#f6b030;--card:#1d1829;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:17px/1.6 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 64px}
+main{max-width:40rem;margin:0 auto;display:grid;gap:28px}
+header{display:grid;gap:6px;border-bottom:2px solid var(--accent);padding-bottom:18px}
+.eyebrow{font:13px/1 var(--body);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:clamp(28px,6vw,40px)/1.1 var(--display);margin:0;text-wrap:balance}
+.meta{color:var(--muted);font-size:15px}
+section{display:grid;gap:8px}
+h2{font:20px/1.25 var(--display);margin:0;text-wrap:balance}
+p,ul{margin:0}
+ul{padding-left:1.2em;display:grid;gap:4px}
+.summary{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.summary strong{color:var(--accent)}
+footer{color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">Пакет ru.shitneba3d</span>
+    <h1>Политика конфиденциальности игры «Щит неба 3D»</h1>
+    <span class="meta">Действует с 18 октября 2026 года</span>
+  </header>
+
+  <p class="summary"><strong>Коротко:</strong> игра не собирает, не отправляет и не продаёт персональные данные. В ней нет регистрации, рекламы, покупок и аналитики. Всё, что игра сохраняет, остаётся на вашем телефоне.</p>
+
+  <section>
+    <h2>1. Какие данные собирает игра</h2>
+    <p>Никаких. Игра не запрашивает имя, почту, телефон, местоположение, контакты, фото или идентификаторы устройства и не передаёт данные третьим лицам.</p>
+  </section>
+
+  <section>
+    <h2>2. Что хранится на устройстве</h2>
+    <p>Прогресс (пройденные миссии, монеты, улучшения, настройки, рекорды) и журнал ошибок игры («чёрный ящик») хранятся только в памяти телефона и никуда сами не отправляются. Журнал ошибок можно скопировать вручную, если вы захотите сообщить о сбое. Удалить эти данные можно, удалив игру или очистив её данные в настройках телефона.</p>
+  </section>
+
+  <section>
+    <h2>3. Режим «Дуэль» по Wi‑Fi</h2>
+    <p>Дуэль связывает два телефона напрямую в одной локальной сети Wi‑Fi. Между ними передаются только игровые команды: положение целей, выстрелы и счёт. В интернет эти данные не уходят и у разработчика не сохраняются.</p>
+  </section>
+
+  <section>
+    <h2>4. Разрешения</h2>
+    <ul>
+      <li>Доступ к сети и Wi‑Fi — только для режима «Дуэль».</li>
+      <li>Вибрация — отдача при стрельбе и взрывах. Её можно выключить в настройках игры.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>5. Дети</h2>
+    <p>Игра не собирает данные ни детей, ни взрослых.</p>
+  </section>
+
+  <section>
+    <h2>6. Изменения</h2>
+    <p>Если политика изменится, новая версия появится по этой же ссылке с новой датой.</p>
+  </section>
+
+  <footer>Вопросы по конфиденциальности — через контакты разработчика на странице игры в RuStore.</footer>
+</main>

@@ -340,6 +340,19 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     public static final String[][] SEQ_DUELHOST = {{"menu", "3"}, {"duel", "1"}, {"dhost", "14"}, {"dh2", "6"}, {"dh3", "10"}, {"end", "0"}};
     public static final String[][] SEQ_DUELJOIN = {{"menu", "5"}, {"djoin", "6"}, {"dj2", "4"}, {"dj3", "10"}, {"dj4", "8"}, {"end", "0"}};
 
+    /** Скриншоты для магазина (RuStore): бой на разных картах кампании. SN_STORE=6-2,9-1 — свой список. */
+    public static String[][] SEQ_STORE = storeSeq();
+
+    static String[][] storeSeq() {
+        String env = System.getenv("SN_STORE");
+        String[] ids = env != null ? env.split(",") : new String[]{"6-2", "9-1", "4-1", "7-1", "10-1", "2-1", "8-1"};
+        java.util.ArrayList<String[]> out = new java.util.ArrayList<>();
+        out.add(new String[]{"menu", "3"});
+        for (String id : ids) out.add(new String[]{"st_" + id, "13"});
+        out.add(new String[]{"end", "0"});
+        return out.toArray(new String[0][]);
+    }
+
     /** Проверка «сочности»: выстрелы, гильзы, взрывы, облёт босса, ночь и гроза. */
     public static final String[][] SEQ_FX = {
             {"menu", "3"}, {"endless", "1"}, {"fx_fire", "6"}, {"fx_boom", "0.17"}, {"fx_boom2", "0.6"}, {"fx_fires", "2.5"}, {"fx_heat", "0.6"},
@@ -447,6 +460,9 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "fx_bolt": world.debugBolt(cam.position); break;
             case "fx_nboom": game.explosion(ahead(45, 2f), 2f); break;
             default:
+                if (next.startsWith("st_")) {
+                    G.SV.tut = true; if (shotStep > 1) game.quitBattle(); ui.debugLaunch(next.substring(3)); break;
+                }
                 if (next.startsWith("m_")) {
                     String[] p = next.split("_");
                     int k = Integer.parseInt(p[2]);
