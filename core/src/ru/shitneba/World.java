@@ -49,6 +49,10 @@ public class World {
     final Array<Mesh3> meshes = new Array<>();
     final Renderer rend;
     public String themeName = "dusk";
+    /** 3.4.0: карта (местность) — у каждой главы кампании своя, см. Maps. */
+    public String map = "valley";
+    /** Карта для следующего build(); после постройки сбрасывается в «долину». */
+    public static String nextMap = "valley";
     public boolean night, sea, dam, snow;
     int hf;
     public float rain, fog, wind;
@@ -58,6 +62,9 @@ public class World {
     public Node3 beam, stars, moon;
     final Array<float[]> clouds = new Array<>();
     public final Array<Vector3> stacks = new Array<>();
+    /** Качалки на «Мираже»: балансиры качаются (tag = {поворот, фаза, скорость}). */
+    public final Array<Node3> jacks = new Array<>();
+    float jackT;
     final Color cloudTint = new Color();
     public final Color smokeTint = new Color(0.84f, 0.83f, 0.81f, 1);
     public final Dyn cloudDyn, rainDyn, boltDyn;
@@ -232,10 +239,11 @@ public class World {
         float h;
         if (hf == 1) h = (float) ((Math.sin(x * 0.012 + z * 0.004) * 6 + Math.sin(x * 0.005 - z * 0.009) * 9) * f);
         else h = hNoise(x, z) * f * f;
+        if (!map.equals("valley")) h = Maps.shape(map, x, z, h);
         float rd = Math.abs(x - ROAD_X);
         if (rd < 30) h *= 0.25f + 0.75f * MathUtils.clamp((rd - 8) / 22f, 0, 1);
         if (sea && x < -120) h = h * MathUtils.clamp(1 - (-120 - x) / 60f, 0, 1) - MathUtils.clamp((-120 - x) / 40f, 0, 1) * 14;
-        if (dam && z < -150 && z > -520 && Math.abs(x) < 150) h = Math.min(h, -3 + Math.max(0, Math.abs(x) - 110) * 0.6f);
+        if (dam && !map.equals("river") && z < -150 && z > -520 && Math.abs(x) < 150) h = Math.min(h, -3 + Math.max(0, Math.abs(x) - 110) * 0.6f);
         if (d > 1000) h += (d - 1000) * 0.09f;
         return h;
     }
@@ -253,6 +261,8 @@ public class World {
         if (content != null) { content.remove(); for (Mesh3 m : meshes) m.dispose(); meshes.clear(); }
         content = new Node3();
         root.add(content);
+        map = nextMap; nextMap = "valley";
+        Maps.prepare(map);
         JsonValue T = G.D.get("THEMES").get(Math.min(theme, G.D.get("THEMES").size - 1));
         themeName = T.getString("name");
         String[] Gr = GROUND.containsKey(themeName) ? GROUND.get(themeName) : GROUND.get("dusk");
@@ -263,7 +273,7 @@ public class World {
         rain = wRain; fog = wFog; wind = wWind;
         dynSky = false; nightK = stormK = nightTgt = stormTgt = 0; bolts.clear(); thunderT = -1; FX.smokeLum = 1f;
         snow = T.getBoolean("snow", false);
-        stacks.clear(); clouds.clear();
+        stacks.clear(); clouds.clear(); jacks.clear();
         int gfx = G.SV.gfx;
         float[] atm = ATM.containsKey(themeName) ? ATM.get(themeName) : ATM.get("dusk");
         JsonValue sunInfo = T.get("sun");
@@ -300,7 +310,7 @@ public class World {
         // дорога
         MB rb = new MB();
         Color rcol = night ? c("3a3428") : (themeName.equals("snow") ? c("a9adb2") : c("6e5e48"));
-        for (float z = 700f; z > -1100f; z -= 12f) {
+        for (float z = 700f; z > Maps.roadEnd(map); z -= 12f) {
             float y = Math.max(height(ROAD_X - 4, z), Math.max(height(ROAD_X + 4, z), height(ROAD_X, z))) + 0.12f;
             rb.box(8, 0.1f, 12.4f, rcol, ROAD_X, y, z - 6);
         }
@@ -312,6 +322,7 @@ public class World {
         buildRocks(Gr);
         buildMountains(T, Gr, gfx);
         buildExtras(T);
+        new Maps(this).build();
         buildClouds(T);
         stars = null; moon = null;
         if (night) buildStars();
@@ -498,6 +509,7 @@ public class World {
             guard++;
             float a = R.nextFloat() * MathUtils.PI2, r = rr(45, 1150), x = MathUtils.sin(a) * r, z = MathUtils.cos(a) * r;
             if (Math.abs(x - ROAD_X) < 14) continue;
+            if (!Maps.treeOk(map, x, z)) continue;
             float y = height(x, z);
             if (y < -1) continue;
             float s = rr(0.7f, 1.5f), sy = s * rr(0.85f, 1.3f), ry = R.nextFloat() * MathUtils.PI2;
@@ -542,7 +554,7 @@ public class World {
             while (true) {
                 float a = R.nextFloat() * MathUtils.PI2, r = 9 + (float) Math.pow(R.nextFloat(), 0.8) * 130;
                 x = MathUtils.sin(a) * r; z = MathUtils.cos(a) * r;
-                if (Math.abs(x - ROAD_X) >= 6 && !(Math.abs(x) < 9 && z > -10 && z < 11)) break;
+                if (Math.abs(x - ROAD_X) >= 6 && !(Math.abs(x) < 9 && z > -10 && z < 11) && Maps.free(map, x, z)) break;
             }
             float s = rr(0.7f, 1.5f);
             base.idt().translate(x, height(x, z) - 0.05f, z).rotateRad(Vector3.Y, R.nextFloat() * MathUtils.PI).scale(s, s * rr(0.7f, 1.2f), s);
@@ -578,6 +590,7 @@ public class World {
         Matrix4 t = new Matrix4();
         for (int i = 0; i < 160; i++) {
             float a = R.nextFloat() * MathUtils.PI2, r = rr(35, 700), x = MathUtils.sin(a) * r, z = MathUtils.cos(a) * r, s = rr(0.6f, 3.5f);
+            if (!Maps.free(map, x, z)) continue;
             t.idt().translate(x, height(x, z) + s * 0.2f, z).rotateRad(Vector3.Y, R.nextFloat() * 3).rotateRad(Vector3.X, R.nextFloat() * 3).scale(s, s * rr(0.5f, 0.9f), s);
             b.add(sph, Color.WHITE, t);
         }
@@ -626,7 +639,7 @@ public class World {
     }
 
     void buildExtras(JsonValue T) {
-        if (themeName.equals("dusk") || themeName.equals("night") || themeName.equals("dawn") || themeName.equals("coast") || themeName.equals("snow")) {
+        if (Maps.village(map) && (themeName.equals("dusk") || themeName.equals("night") || themeName.equals("dawn") || themeName.equals("coast") || themeName.equals("snow"))) {
             MB b = new MB(), wl = new MB();
             float cx = 290f, cz = -460f;
             for (int i = 0; i < 44; i++) {
@@ -726,6 +739,13 @@ public class World {
         if (stars != null) stars.pos.set(cp.x, 0, cp.z);
         if (moon != null) moon.pos.set(cp.x, 0, cp.z).add(tv.set(0.5f, 0.45f, -1).nor().scl(2500));
         if (dynSky) applyDynamic(dt);
+        if (jacks.size > 0) {
+            jackT += dt;
+            for (Node3 n : jacks) {
+                float[] p = (float[]) n.tag;
+                n.rot.idt().rotateRad(Vector3.Y, p[0]).rotateRad(Vector3.X, MathUtils.sin(jackT * p[2] + p[1]) * 0.32f);
+            }
+        }
         if (rain > 0) {
             lightning -= dt;
             if (lightning <= 0) {

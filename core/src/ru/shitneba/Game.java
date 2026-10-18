@@ -69,6 +69,8 @@ public class Game {
     final Array<Rocket> rockets = new Array<>();
     final Array<Ebul> ebul = new Array<>();
     public final Lock lock = new Lock();
+    /** Автотест карт: поднять камеру (вид сверху), 0 — обычная. */
+    public static float debugCamUp = 0;
     public final Vector3 aimDir = new Vector3(0, 0, -1), camPos = new Vector3(), aimPoint = new Vector3();
     public final Color trc = new Color(1, 0.85f, 0.45f, 1);
     public static final Vector3 AIM = new Vector3(0, 2.6f, 0.6f);
@@ -1701,6 +1703,7 @@ public class Game {
         trc.set(G.hex(tr.getString("col")));
         if (CM != null) {
             JsonValue wx = CM.get("weather");
+            World.nextMap = CM.getString("map", Maps.forMission(CM.getString("id", "")));
             world.build(CM.getInt("theme", 0), CM.getBoolean("dark", false), wx != null ? wx.getFloat("rain", 0) : 0, wx != null ? wx.getFloat("fog", 0) : 0,
                     wx != null ? wx.getFloat("wind", 0) : 0, CM.has("obj") ? CM.get("obj").getString("kind", "") : "", CM.getBoolean("noBeam", false));
         } else {
@@ -1877,7 +1880,10 @@ public class Game {
         } else {
             Objs.Obj m = Objs.make(kind); root.add(m.g); ms.models.add(m);
             if (kind.equals("radar")) { m.g.pos.set(-26, height(-26, -22), -22); ms.aim.set(-26, height(-26, -22) + 6, -22); ms.r = 8; }
-            else if (kind.equals("dam")) { m.g.pos.set(0, 0, -240); ms.aim.set(0, 18, -236); ms.r = 22; }
+            else if (kind.equals("dam")) {
+                float dx = world.map.equals("river") ? Maps.DAM_X : 0;
+                m.g.pos.set(dx, 0, -240); ms.aim.set(dx, 18, -236); ms.r = 22;
+            }
             else if (kind.equals("sub")) { m.g.pos.set(34, height(34, -40), -40); ms.aim.set(34, height(34, -40) + 4, -40); ms.r = 14; }
         }
         return ms;
@@ -2104,6 +2110,10 @@ public class Game {
         if (quake > 0) cp.y += MathUtils.sin(T * 61f) * quake * 0.22f + MathUtils.sin(T * 37f) * quake * 0.12f;
         cam.position.set(cp);
         cam.direction.set(aimDir).add(0, recoil * recoil * (grom ? 0.03f : 0.01f), 0).nor();
+        if (debugCamUp > 0) { // автотест карт: вид с высоты
+            cam.position.add(0, debugCamUp, 0).add(-aimDir.x * debugCamUp * 0.6f, 0, -aimDir.z * debugCamUp * 0.6f);
+            cam.direction.set(aimDir.x, 0, aimDir.z).nor().add(0, -0.55f, 0).nor();
+        }
         if (killCamT > 0) {
             killCamT -= dt;
             float pr = 1f - Math.max(0, killCamT) / KILL_DUR;

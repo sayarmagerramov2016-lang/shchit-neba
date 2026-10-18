@@ -350,6 +350,20 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     public static final String[][] SEQ_OBJ = {
             {"menu", "3"}, {"o_dam", "3"}, {"o_convoy", "4"}, {"o_sub", "3"}, {"o_radar", "3"}, {"end", "0"}};
 
+    /** 3.4.0: карты кампании — по миссии из каждой главы, 3 ракурса (прямо, влево, вправо). SN_MAPS=3-1,4-2 — только эти. */
+    public static String[][] SEQ_MAPS = mapsSeq();
+    float mapYaw;
+
+    static String[][] mapsSeq() {
+        String env = System.getenv("SN_MAPS");
+        String[] ids = env != null ? env.split(",") : new String[]{"1-3", "2-2", "3-1", "4-1", "5-3", "6-2", "7-1", "8-1", "9-1", "10-1", "11-2"};
+        java.util.ArrayList<String[]> out = new java.util.ArrayList<>();
+        out.add(new String[]{"menu", "3"});
+        for (String id : ids) for (int k = 0; k < 4; k++) out.add(new String[]{"m_" + id + "_" + k, k == 0 ? "3" : "1.5"});
+        out.add(new String[]{"end", "0"});
+        return out.toArray(new String[0][]);
+    }
+
     void lookObj() {
         if (game.obj == null) return;
         Vector3 d = new Vector3(game.obj.aim).sub(game.camPos);
@@ -367,6 +381,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         shotT += dt;
         String[][] seq = SEQ;
         if (seq == SEQ_OBJ && shotStep > 0 && game.obj != null) { botOn = false; game.firing = false; lookObj(); }
+        if (seq == SEQ_MAPS && shotStep > 0) { botOn = false; game.firing = false; game.aimYaw = mapYaw; game.aimPitch = 0.07f; }
         if (shotStep >= seq.length) return;
         String name = seq[shotStep][0];
         float wait = Float.parseFloat(seq[shotStep][1]);
@@ -431,7 +446,15 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "fx_storm": world.stormK = 1f; world.stormTgt = 1f; world.wind = 30; break;
             case "fx_bolt": world.debugBolt(cam.position); break;
             case "fx_nboom": game.explosion(ahead(45, 2f), 2f); break;
-            default: break;
+            default:
+                if (next.startsWith("m_")) {
+                    String[] p = next.split("_");
+                    int k = Integer.parseInt(p[2]);
+                    mapYaw = k == 0 || k == 3 ? 0f : (k == 1 ? 0.95f : -0.95f);
+                    Game.debugCamUp = k == 3 ? 160f : 0f;
+                    if (k == 0) { G.SV.tut = true; if (shotStep > 1) game.quitBattle(); ui.debugLaunch(p[1]); }
+                }
+                break;
         }
     }
 

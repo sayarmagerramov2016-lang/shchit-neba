@@ -11,6 +11,7 @@ public class DesktopLauncher {
         if (args.length > 2 && args[2].equals("camp")) ShieldGame.SEQ = ShieldGame.SEQ_CAMP;
         if (args.length > 2 && args[2].equals("objs")) ShieldGame.SEQ = ShieldGame.SEQ_OBJ;
         if (args.length > 2 && args[2].equals("models")) ShieldGame.studioMode = true;
+        if (args.length > 2 && args[2].equals("maps")) ShieldGame.SEQ = ShieldGame.SEQ_MAPS;
         if (args.length > 2 && args[2].equals("fx")) ShieldGame.SEQ = ShieldGame.SEQ_FX;
         if (args.length > 2 && args[2].equals("strike")) ShieldGame.SEQ = ShieldGame.SEQ_STRIKE;
         if (args.length > 2 && args[2].equals("duelhost")) ShieldGame.SEQ = ShieldGame.SEQ_DUELHOST;
