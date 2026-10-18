@@ -18,8 +18,6 @@
    echo "sdk.dir=$S" > <repo>/local.properties
    ```
    В build.gradle уже прописано зеркало Maven Central (Google storage) — на случай 429.
-   ```
-   ```
 3. Maven Central иногда отвечает 429 — просто повторить сборку через 20 с.
 
 ## Сборка
