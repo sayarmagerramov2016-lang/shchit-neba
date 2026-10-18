@@ -1,144 +1,79 @@
 package ru.shitneba;
 
 import com.badlogic.gdx.graphics.Color;
-import java.util.HashMap;
-import java.util.Map;
+import com.badlogic.gdx.math.MathUtils;
+
 import ru.shitneba.gfx.MB;
 import ru.shitneba.gfx.Mesh3;
 import ru.shitneba.gfx.Node3;
 
+/** Объекты миссий: радар, плотина, подстанция, грузовик колонны. Порт objs.gd. */
 public final class Objs {
-   static final Map<String, Mesh3[]> cache = new HashMap<>();
+    public static final class Obj { public Node3 g, spin; }
 
-   static Color c(String h) {
-      return G.hex(h);
-   }
+    static Color c(String h) { return G.hex(h); }
 
-   public static Objs.Obj make(String kind) {
-      Mesh3[] ms = cache.get(kind);
-      if (ms == null) {
-         ms = new Mesh3[2];
-         MB b = new MB();
-         float PI = (float) Math.PI;
-         byte var5 = -1;
-         switch (kind.hashCode()) {
-            case 99216:
-               if (kind.equals("dam")) {
-                  var5 = 1;
-               }
-               break;
-            case 114240:
-               if (kind.equals("sub")) {
-                  var5 = 2;
-               }
-               break;
-            case 108270342:
-               if (kind.equals("radar")) {
-                  var5 = 0;
-               }
-         }
+    static final java.util.Map<String, Mesh3[]> cache = new java.util.HashMap<>();
 
-         label129: {
-            float[] i;
-            int x;
-            int k;
-            switch (var5) {
-               case 0:
-                  b.box(3.0F, 1.2F, 7.0F, c("4d5a3c"), 0.0F, 1.4F, 0.0F);
-
-                  for (float z : new float[]{-2.5F, 2.5F}) {
-                     for (float s : new float[]{-1.0F, 1.0F}) {
-                        b.cyl(0.55F, 0.55F, 0.4F, 12, Models.TIRE, s * 1.3F, 0.55F, z, 0.0F, 0.0F, PI / 2.0F);
-                     }
-                  }
-
-                  b.box(1.6F, 3.5F, 1.6F, c("5a6646"), 0.0F, 3.8F, 0.0F);
-                  b.box(2.6F, 0.5F, 2.6F, c("3c4630"), 0.0F, 5.6F, 0.0F);
-                  MB a = new MB();
-                  a.box(9.0F, 2.6F, 0.3F, c("6c7656"));
-
-                  for (int ix = 0; ix < 9; ix++) {
-                     a.box(0.08F, 2.6F, 0.5F, c("3a3f33"), -4 + ix, 0.0F, -0.2F);
-                  }
-
-                  ms[1] = a.mesh();
-                  break label129;
-               case 1:
-                  b.extrude(new float[][]{{-6.0F, 0.0F}, {6.0F, 0.0F}, {3.0F, 28.0F}, {-3.0F, 28.0F}}, 220.0F, c("8d8a82"), 0.0F, -4.0F, 0.0F);
-
-                  for (int ix = 0; ix < 6; ix++) {
-                     b.box(4.0F, 22.0F, 1.0F, c("6e6c66"), -50 + ix * 20, 8.0F, 5.4F);
-                  }
-
-                  for (int ix = 0; ix < 3; ix++) {
-                     b.box(8.0F, 18.0F, 0.6F, c("bfd8e8"), -20 + ix * 20, 5.0F, 6.2F);
-                  }
-
-                  b.box(220.0F, 1.2F, 7.0F, c("5b5953"), 0.0F, 24.6F, 0.0F);
-                  break label129;
-               case 2:
-                  for (int ix = 0; ix < 3; ix++) {
-                     float xx = -8.0F + ix * 8;
-                     b.box(4.0F, 4.0F, 3.0F, c("6e7570"), xx, 2.0F, 0.0F);
-
-                     for (int kx = 0; kx < 3; kx++) {
-                        b.cyl(0.25F, 0.25F, 2.0F, 8, c("c8b88a"), xx - 1.2F + kx * 1.2F, 5.0F, 0.0F);
-                     }
-                  }
-
-                  for (float xx : new float[]{-16.0F, 16.0F}) {
-                     b.box(0.5F, 18.0F, 0.5F, c("777777"), xx, 9.0F, 0.0F);
-                     b.box(8.0F, 0.4F, 0.4F, c("777777"), xx, 16.0F, 0.0F);
-                  }
-
-                  b.box(30.0F, 0.3F, 14.0F, c("8a8a80"), 0.0F, 0.15F, 0.0F);
-                  break label129;
-               default:
-                  b.box(2.4F, 0.4F, 8.0F, Models.DARK, 0.0F, 1.0F, 0.0F);
-                  i = new float[]{-2.8F, 1.4F, 2.8F};
-                  x = i.length;
-                  k = 0;
+    public static Obj make(String kind) {
+        Mesh3[] ms = cache.get(kind);
+        if (ms == null) {
+            ms = new Mesh3[2];
+            MB b = new MB();
+            float PI = MathUtils.PI;
+            switch (kind) {
+                case "radar": {
+                    b.box(3, 1.2f, 7, c("4d5a3c"), 0, 1.4f, 0);
+                    for (float z : new float[]{-2.5f, 2.5f}) for (float s : new float[]{-1, 1}) b.cyl(0.55f, 0.55f, 0.4f, 12, Models.TIRE, s * 1.3f, 0.55f, z, 0, 0, PI / 2);
+                    b.box(1.6f, 3.5f, 1.6f, c("5a6646"), 0, 3.8f, 0);
+                    b.box(2.6f, 0.5f, 2.6f, c("3c4630"), 0, 5.6f, 0);
+                    MB a = new MB();
+                    a.box(9, 2.6f, 0.3f, c("6c7656"));
+                    for (int i = 0; i < 9; i++) a.box(0.08f, 2.6f, 0.5f, c("3a3f33"), -4 + i, 0, -0.2f);
+                    ms[1] = a.mesh();
+                    break;
+                }
+                case "dam": {
+                    b.extrude(new float[][]{{-6, 0}, {6, 0}, {3, 28}, {-3, 28}}, 220, c("8d8a82"), 0, -4, 0);
+                    for (int i = 0; i < 6; i++) b.box(4, 22, 1, c("6e6c66"), -50 + i * 20, 8, 5.4f);
+                    for (int i = 0; i < 3; i++) b.box(8, 18, 0.6f, c("bfd8e8"), -20 + i * 20, 5, 6.2f);
+                    b.box(220, 1.2f, 7, c("5b5953"), 0, 24.6f, 0);
+                    break;
+                }
+                case "sub": {
+                    for (int i = 0; i < 3; i++) {
+                        float x = -8f + i * 8;
+                        b.box(4, 4, 3, c("6e7570"), x, 2, 0);
+                        for (int k = 0; k < 3; k++) b.cyl(0.25f, 0.25f, 2, 8, c("c8b88a"), x - 1.2f + k * 1.2f, 5, 0);
+                    }
+                    for (float x : new float[]{-16f, 16f}) { b.box(0.5f, 18, 0.5f, c("777777"), x, 9, 0); b.box(8, 0.4f, 0.4f, c("777777"), x, 16, 0); }
+                    b.box(30, 0.3f, 14, c("8a8a80"), 0, 0.15f, 0);
+                    break;
+                }
+                default: { // truck
+                    b.box(2.4f, 0.4f, 8, Models.DARK, 0, 1.0f, 0);
+                    for (float z : new float[]{-2.8f, 1.4f, 2.8f}) for (float s : new float[]{-1, 1}) b.cyl(0.6f, 0.6f, 0.45f, 14, Models.TIRE, s * 1.2f, 0.6f, z, 0, 0, PI / 2);
+                    b.extrude(new float[][]{{-1, 0}, {1.1f, 0}, {1.2f, 0.9f}, {0.9f, 1.7f}, {-1, 1.7f}}, 2.5f, c("56634a"), 0, 1.2f, -2.9f);
+                    b.box(2.3f, 0.6f, 0.05f, Models.GLASS, 0, 2.5f, -3.95f);
+                    b.box(2.6f, 2.4f, 5.2f, c("6b7752"), 0, 2.5f, 1.4f);
+                }
             }
+            ms[0] = b.mesh();
+            cache.put(kind, ms);
+        }
+        Obj o = new Obj();
+        o.g = new Node3();
+        Node3 body = new Node3(ms[0], Models.MAT_HULL);
+        body.castShadow = true;
+        o.g.add(body);
+        if (ms[1] != null) {
+            o.spin = new Node3(ms[1], Models.MAT_HULL);
+            o.spin.castShadow = true;
+            o.spin.pos.set(0, 7.2f, 0);
+            o.g.add(o.spin);
+        }
+        return o;
+    }
 
-            while (k < x) {
-               float z = i[k];
-
-               for (float s : new float[]{-1.0F, 1.0F}) {
-                  b.cyl(0.6F, 0.6F, 0.45F, 14, Models.TIRE, s * 1.2F, 0.6F, z, 0.0F, 0.0F, PI / 2.0F);
-               }
-
-               k++;
-            }
-
-            b.extrude(new float[][]{{-1.0F, 0.0F}, {1.1F, 0.0F}, {1.2F, 0.9F}, {0.9F, 1.7F}, {-1.0F, 1.7F}}, 2.5F, c("56634a"), 0.0F, 1.2F, -2.9F);
-            b.box(2.3F, 0.6F, 0.05F, Models.GLASS, 0.0F, 2.5F, -3.95F);
-            b.box(2.6F, 2.4F, 5.2F, c("6b7752"), 0.0F, 2.5F, 1.4F);
-         }
-
-         ms[0] = b.mesh();
-         cache.put(kind, ms);
-      }
-
-      Objs.Obj o = new Objs.Obj();
-      o.g = new Node3();
-      Node3 body = new Node3(ms[0], Models.MAT_HULL);
-      body.castShadow = true;
-      o.g.add(body);
-      if (ms[1] != null) {
-         o.spin = new Node3(ms[1], Models.MAT_HULL);
-         o.spin.castShadow = true;
-         o.spin.pos.set(0.0F, 7.2F, 0.0F);
-         o.g.add(o.spin);
-      }
-
-      return o;
-   }
-
-   private Objs() {
-   }
-
-   public static final class Obj {
-      public Node3 g;
-      public Node3 spin;
-   }
+    private Objs() { }
 }

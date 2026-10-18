@@ -5,7 +5,7 @@
 
 ## Что это
 Игра про ПВО на Java/libGDX 1.13.1. Порт старой версии 2.0.4 (Godot 4.3).
-Модули: `core` (вся игра), `lwjgl3` (ПК), `android` (APK). Ресурсы: `core/assets` (data.json, шрифты).
+Модули: `core` (вся игра), `lwjgl3` (ПК), `android` (APK). Ресурсы: `assets/` в корне (data.json, шрифты).
 
 ## Как начать работу в новом чате
 1. Код лежит здесь, в репозитории. Компьютер чата каждый раз чистый.
@@ -17,11 +17,15 @@
    yes | latest/bin/sdkmanager --sdk_root=$S "platforms;android-34" "build-tools;34.0.0" "platform-tools"
    echo "sdk.dir=$S" > <repo>/local.properties
    ```
+   В build.gradle уже прописано зеркало Maven Central (Google storage) — на случай 429.
+   ```
+   ```
 3. Maven Central иногда отвечает 429 — просто повторить сборку через 20 с.
 
 ## Сборка
 - APK: `./gradlew :android:assembleRelease` → `android/build/outputs/apk/release/android-release.apk`
-  Пакет `ru.shitneba3d`, ключ `android/shitneba.keystore` (пароль shitneba123, alias shitneba).
+  Пакет `ru.shitneba3d`, ключ `android/shitneba.keystore` (пароль shitneba123, alias shitneba) — ОРИГИНАЛЬНЫЙ,
+  SHA-256 сертификата 6aa5ccf3…906009. APK встаёт поверх версий, которые уже стоят у владельца.
 - ПК: `./gradlew :lwjgl3:dist` → `lwjgl3/build/libs/ShitNeba3D-desktop.jar`.
   Для Windows-архива Java берётся из pip-пакета jdk4py (win_amd64), запуск `ShchitNeba3D.bat`.
 - Версия: `G.VER` и строка в `BlackBox.java` + versionCode/versionName в `android/build.gradle`.
@@ -42,7 +46,6 @@
 - 3.1.0 — кампания (11×5), 16 испытаний, режим «Рой», дуэль по Wi‑Fi.
 - 3.1.1 — ускорение для телефона (пониженное разрешение, авто-FPS), ПК-версия.
 - 3.1.2 — «чёрный ящик».
-- 18.10.2026 — исходники 3.1.2 восстановлены декомпиляцией ПК-сборки (оригинальные исходники пропали
-  вместе с компьютером старого чата). Android-модуль и иконка собраны заново.
-  Ключ подписи в репозитории НОВЫЙ: APK с ним не встанет поверх старой 3.1.2 — нужен оригинальный
-  `shitneba.keystore` из ShchitNeba3D-Java-source.zip (если найдётся, заменить и закоммитить).
+- 18.10.2026 — сначала залиты исходники, восстановленные декомпиляцией ПК-сборки (с новым ключом).
+  В тот же день их заменили ОРИГИНАЛЬНЫЕ исходники 3.1.2 из чата, где игра делалась (с комментариями,
+  отладочными режимами и оригинальным ключом подписи). Декомпилированная версия больше не нужна.

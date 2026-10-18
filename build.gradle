@@ -3,39 +3,5 @@ buildscript {
     dependencies { classpath 'com.android.tools.build:gradle:8.5.2' }
 }
 allprojects {
-    repositories { google(); mavenCentral() }
-}
-configure([project(':core'), project(':lwjgl3')]) {
-    apply plugin: 'java-library'
-    java { sourceCompatibility = JavaVersion.VERSION_1_8; targetCompatibility = JavaVersion.VERSION_1_8 }
-    tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.compilerArgs << '-Xlint:-options' }
-}
-project(':core') {
-    sourceSets.main.java.srcDirs = ['src']
-    sourceSets.main.resources.srcDirs = []
-    dependencies {
-        api "com.badlogicgames.gdx:gdx:$gdxVersion"
-        api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
-    }
-}
-project(':lwjgl3') {
-    apply plugin: 'application'
-    sourceSets.main.java.srcDirs = ['src']
-    sourceSets.main.resources.srcDirs = [rootProject.file('core/assets')]
-    application { mainClass = 'ru.shitneba.desktop.DesktopLauncher' }
-    java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    dependencies {
-        implementation project(':core')
-        implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
-        implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
-        implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
-    }
-    tasks.register('dist', Jar) {
-        archiveFileName = 'ShitNeba3D-desktop.jar'
-        manifest { attributes 'Main-Class': 'ru.shitneba.desktop.DesktopLauncher' }
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-        dependsOn configurations.runtimeClasspath
-        from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
-        with jar
-    }
+    repositories { maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }; mavenCentral(); google() }
 }

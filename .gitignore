@@ -6,3 +6,7 @@ lwjgl3/save3d.json
 *.txt.log
 .idea/
 android/libs/
+lwjgl3/sfx3/
+crash.txt
+freeze.txt
+save3d.json

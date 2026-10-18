@@ -6,75 +6,41 @@ import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
-import com.badlogic.gdx.utils.Array.ArrayIterator;
 
+/** Неиндексированный меш треугольников: pos3 nrm3 col4 uv2. */
 public class Mesh3 implements Disposable {
-   public static final int STRIDE = 12;
-   public static final VertexAttributes ATTRS = new VertexAttributes(
-      new VertexAttribute[]{
-         new VertexAttribute(1, 3, "a_position"),
-         new VertexAttribute(8, 3, "a_normal"),
-         new VertexAttribute(2, 4, "a_color"),
-         new VertexAttribute(16, 2, "a_texCoord0")
-      }
-   );
-   static final Array<Mesh3> ALL = new Array();
-   public final Mesh mesh;
-   public final int count;
-   public final Vector3 center = new Vector3();
-   public float radius;
+    public static final int STRIDE = 12;
+    public static final VertexAttributes ATTRS = new VertexAttributes(
+            new VertexAttribute(VertexAttributes.Usage.Position, 3, "a_position"),
+            new VertexAttribute(VertexAttributes.Usage.Normal, 3, "a_normal"),
+            new VertexAttribute(VertexAttributes.Usage.ColorUnpacked, 4, "a_color"),
+            new VertexAttribute(VertexAttributes.Usage.TextureCoordinates, 2, "a_texCoord0"));
+    static final Array<Mesh3> ALL = new Array<>();
 
-   public Mesh3(float[] v, int floats) {
-      this.count = floats / 12;
-      this.mesh = new Mesh(true, Math.max(1, this.count), 0, ATTRS);
-      this.mesh.setVertices(v, 0, floats);
-      float mnx = 1.0E9F;
-      float mny = 1.0E9F;
-      float mnz = 1.0E9F;
-      float mxx = -1.0E9F;
-      float mxy = -1.0E9F;
-      float mxz = -1.0E9F;
+    public final Mesh mesh;
+    public final int count;
+    public final Vector3 center = new Vector3();
+    public float radius;
 
-      for (int i = 0; i < floats; i += 12) {
-         mnx = Math.min(mnx, v[i]);
-         mny = Math.min(mny, v[i + 1]);
-         mnz = Math.min(mnz, v[i + 2]);
-         mxx = Math.max(mxx, v[i]);
-         mxy = Math.max(mxy, v[i + 1]);
-         mxz = Math.max(mxz, v[i + 2]);
-      }
+    public Mesh3(float[] v, int floats) {
+        count = floats / STRIDE;
+        mesh = new Mesh(true, Math.max(1, count), 0, ATTRS);
+        mesh.setVertices(v, 0, floats);
+        float mnx = 1e9f, mny = 1e9f, mnz = 1e9f, mxx = -1e9f, mxy = -1e9f, mxz = -1e9f;
+        for (int i = 0; i < floats; i += STRIDE) {
+            mnx = Math.min(mnx, v[i]); mny = Math.min(mny, v[i + 1]); mnz = Math.min(mnz, v[i + 2]);
+            mxx = Math.max(mxx, v[i]); mxy = Math.max(mxy, v[i + 1]); mxz = Math.max(mxz, v[i + 2]);
+        }
+        if (count == 0) { mnx = mny = mnz = mxx = mxy = mxz = 0; }
+        center.set((mnx + mxx) / 2, (mny + mxy) / 2, (mnz + mxz) / 2);
+        float r = 0;
+        for (int i = 0; i < floats; i += STRIDE) r = Math.max(r, center.dst2(v[i], v[i + 1], v[i + 2]));
+        radius = (float) Math.sqrt(r);
+        ALL.add(this);
+    }
 
-      if (this.count == 0) {
-         mxz = 0.0F;
-         mxy = 0.0F;
-         mxx = 0.0F;
-         mnz = 0.0F;
-         mny = 0.0F;
-         mnx = 0.0F;
-      }
+    @Override
+    public void dispose() { mesh.dispose(); ALL.removeValue(this, true); }
 
-      this.center.set((mnx + mxx) / 2.0F, (mny + mxy) / 2.0F, (mnz + mxz) / 2.0F);
-      float r = 0.0F;
-
-      for (int i = 0; i < floats; i += 12) {
-         r = Math.max(r, this.center.dst2(v[i], v[i + 1], v[i + 2]));
-      }
-
-      this.radius = (float)Math.sqrt(r);
-      ALL.add(this);
-   }
-
-   public void dispose() {
-      this.mesh.dispose();
-      ALL.removeValue(this, true);
-   }
-
-   public static void disposeAll() {
-      ArrayIterator var0 = new Array(ALL).iterator();
-
-      while (var0.hasNext()) {
-         Mesh3 m = (Mesh3)var0.next();
-         m.dispose();
-      }
-   }
+    public static void disposeAll() { for (Mesh3 m : new Array<>(ALL)) m.dispose(); }
 }

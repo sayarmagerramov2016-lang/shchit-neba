@@ -1,21 +1,14 @@
 package ru.shitneba;
 
+/** Методы интерфейса, которые вызывает логика боя. */
 public interface GameUI {
-   void toast(String var1);
-
-   void banner(String var1, boolean var2, String var3);
-
-   void hint(String var1);
-
-   void comm(String var1, String var2);
-
-   void startHud();
-
-   void over(boolean var1);
-
-   void result(boolean var1);
-
-   void strikeOver();
-
-   void duelResult(boolean var1, boolean var2, String var3);
+    void toast(String m);
+    void banner(String t, boolean boss, String sub);
+    void hint(String t);
+    void comm(String who, String text);
+    void startHud();
+    void over(boolean rec);
+    void result(boolean win);
+    void strikeOver();
+    void duelResult(boolean lostLink, boolean win, String reason);
 }

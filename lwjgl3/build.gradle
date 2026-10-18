@@ -1,0 +1,19 @@
+apply plugin: 'application'
+java { sourceCompatibility = JavaVersion.VERSION_11; targetCompatibility = JavaVersion.VERSION_11 }
+sourceSets.main.java.srcDirs = ['src']
+sourceSets.main.resources.srcDirs = ['../assets']
+application { mainClass = 'ru.shitneba.desktop.DesktopLauncher' }
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
+}
+tasks.register('dist', Jar) {
+    archiveFileName = 'ShitNeba3D-desktop.jar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': 'ru.shitneba.desktop.DesktopLauncher' }
+    dependsOn configurations.runtimeClasspath
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}
