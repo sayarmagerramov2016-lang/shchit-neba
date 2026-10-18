@@ -425,6 +425,11 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         shotT = 0;
         Studio.Item it = studio.items.get(stIdx);
         save(shotDir + "/" + String.format("%02d", stIdx) + "_" + it.group + "_" + it.id + "_" + stView + ".png");
+        if (stView == 0) {
+            final int[] n = {0};
+            studio.root.forEach(k -> { if (k.mesh != null) n[0] += k.mesh.count / 3; });
+            Gdx.app.log("tris", it.id + " " + n[0]);
+        }
         if (++stView > 2) {
             stView = 0;
             if (++stIdx >= studio.items.size) { Gdx.app.exit(); return; }

@@ -24,6 +24,8 @@ public final class Studio {
     final Vector3 center = new Vector3();
     float radius = 5f;
     Node3 spin;
+    /** Точка съёмки: зданиям нужно чистое место в стороне от подиума меню. */
+    float ox, oz;
 
     public Studio() {
         JsonValue D = G.D;
@@ -72,10 +74,14 @@ public final class Studio {
                 break;
         }
         root.add(g);
-        g.pos.set(0, 0, 0);
+        boolean big = it.group.equals("target") || it.group.equals("obj");
+        ox = big ? 0 : 0; oz = big ? -70 : 0;
+        String sp = System.getenv("SN_SPOT");
+        if (big && sp != null) { String[] a = sp.split(","); ox = Float.parseFloat(a[0]); oz = Float.parseFloat(a[1]); }
+        g.pos.set(ox, 0, oz);
         root.updateGlobal(null);
         measure(g);
-        float ground = world.height(0, 0);
+        float ground = world.height(ox, oz);
         if (lift < 0) g.pos.y = ground + Math.max(2f, radius * 0.9f) - center.y;
         else g.pos.y = ground + lift;
         root.updateGlobal(null);

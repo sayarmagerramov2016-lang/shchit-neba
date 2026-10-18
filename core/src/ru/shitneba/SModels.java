@@ -220,94 +220,16 @@ public final class SModels {
     static final Map<String, Target> tgCache = new HashMap<>();
 
     public static Target target(String kind, String theme) {
-        if (kind.equals("radar")) {
-            Objs.Obj o = Objs.make("radar");
-            Target t = new Target(); t.g = o.g; t.spin = o.spin; t.r = 4.5f; t.hr = 3f;
-            return t;
-        }
         String key = kind + theme;
         Target c = tgCache.get(key);
         if (c == null) {
-            MB.hq = true;
-            MB b = new MB(), gl = new MB();
-            gl.noAo = true;
-            boolean snow = theme.equals("snow");
-            Color green = c("4c5a3a");
-            Random R = new Random(kind.hashCode());
-            float r, hr;
-            switch (kind) {
-                case "depot": {
-                    float[][] arch = new float[13][];
-                    for (int i = 0; i < 13; i++) { float a = PI * i / 12f; arch[i] = new float[]{MathUtils.cos(a) * 5.5f, MathUtils.sin(a) * 4.2f}; }
-                    b.extrude(arch, 14f, !snow ? c("6b7058") : c("c9ccd0"), 0, 0.6f, 0, 0, PI / 2, 0);
-                    b.box(11.2f, 0.6f, 14.2f, c("5a5a52"), 0, 0.3f, 0);
-                    b.box(4.2f, 3.4f, 0.2f, c("3d4030"), 0, 2.3f, -7.05f);
-                    for (int i = 0; i < 6; i++) b.box(0.12f, 4f, 14.05f, c("55594a"), -4.6f + i * 1.84f, 2.4f, 0);
-                    for (int i = 0; i < 7; i++) {
-                        float px = -9 + R.nextFloat() * 2.5f, pz = -6 + R.nextFloat() * 12;
-                        float h = 0.9f + (i % 3) * 0.9f;
-                        b.box(1.6f, 0.9f, 1.1f, c("5d6a3a"), px, h - 0.45f, pz, 0, R.nextFloat() * 0.4f, 0);
-                    }
-                    for (int i = 0; i < 8; i++) b.cyl(0.4f, 0.4f, 1.2f, 12, i % 2 == 1 ? c("3d5a6a") : c("6a3a2a"), 7.2f + (i % 2) * 0.9f, 0.6f, -3 + (i / 2) * 0.9f);
-                    r = 8; hr = 2.5f;
-                    break;
-                }
-                case "hq": {
-                    b.extrude(new float[][]{{-6, 0}, {6, 0}, {4.5f, 3.2f}, {-4.5f, 3.2f}}, 11f, !snow ? c("7d7b72") : c("b8bcc0"), 0, 0, 0);
-                    b.box(8.5f, 0.5f, 6f, c("6a685f"), 0, 3.4f, 0);
-                    b.box(2.4f, 2.2f, 0.3f, c("2a2c28"), 0, 1.1f, -5.6f);
-                    b.box(4f, 2.6f, 2.4f, c("6a685f"), 0, 1.3f, -6.8f);
-                    for (float s : new float[]{-1, 1}) {
-                        b.cyl(0.12f, 0.2f, 14, 8, c("777777"), s * 3.2f, 7.5f, 1.5f);
-                        for (int k = 0; k < 3; k++) b.box(1.4f, 0.06f, 0.06f, c("777777"), s * 3.2f, 9 + k * 2, 1.5f);
-                        gl.sph(0.18f, new Color(1, 0.15f, 0.1f, 1), s * 3.2f, 14.6f, 1.5f);
-                    }
-                    b.cyl(0.9f, 0.9f, 0.5f, 18, c("555555"), -2, 3.9f, 1.8f);
-                    b.sph(1.2f, WH, -2, 4.6f, 1.8f, 1, 0.4f, 1);
-                    for (int i = 0; i < 14; i++) {
-                        float a = PI * 0.25f + i / 13f * PI * 1.5f;
-                        b.capsule(0.4f, 1.1f, c("9c8a5f"), MathUtils.sin(a) * 8.5f, 0.4f, MathUtils.cos(a) * 8.5f, 0, a, PI / 2);
-                    }
-                    r = 7.5f; hr = 2f;
-                    break;
-                }
-                case "ew": {
-                    b.box(2.6f, 0.5f, 8.5f, c("2a2c26"), 0, 1.1f, 0);
-                    for (float z : new float[]{-3f, -1.6f, 2.2f, 3.4f}) for (float s : new float[]{-1, 1})
-                        b.cyl(0.6f, 0.6f, 0.45f, 16, c("1a1a1a"), s * 1.25f, 0.6f, z, 0, 0, PI / 2);
-                    b.extrude(new float[][]{{-1, 0}, {1.1f, 0}, {1.2f, 0.9f}, {0.9f, 1.8f}, {-1, 1.8f}}, 2.6f, green, 0, 1.3f, -3.2f);
-                    b.box(2.5f, 0.6f, 0.05f, c("1b2a3a"), 0, 2.6f, -4.25f);
-                    b.box(2.6f, 2.6f, 5f, green, 0, 2.7f, 1.3f);
-                    b.sph(1.2f, WH, 0, 4.3f, 0.2f, 1, 0.8f, 1);
-                    for (int i = 0; i < 6; i++) {
-                        float px = -0.9f + (i % 3) * 0.9f, pz = 2.2f + (i / 3) * 1.1f;
-                        b.cyl(0.03f, 0.05f, 3.2f + (i % 2), 6, c("888888"), px, 4f + 1.6f, pz);
-                        b.box(0.5f, 0.04f, 0.04f, c("888888"), px, 4f + 2.8f, pz, 0, i * 0.6f, 0);
-                    }
-                    gl.sph(0.14f, new Color(1, 0.6f, 0.1f, 1), 0, 5.3f, 0.2f);
-                    r = 5; hr = 2.5f;
-                    break;
-                }
-                default: {
-                    for (int i = 0; i < 3; i++) {
-                        float x = -5f + i * 5f;
-                        b.cyl(1.7f, 1.7f, 9, 22, i != 1 ? c("a8a69a") : c("8a9070"), x, 2.4f, 0, PI / 2, 0, 0);
-                        for (float z : new float[]{-4.6f, 4.6f}) b.sph(1.7f, c("9a988c"), x, 2.4f, z, 1, 1, 0.35f);
-                        for (float z : new float[]{-2.8f, 2.8f}) b.box(3.2f, 0.9f, 0.6f, c("555550"), x, 0.45f, z);
-                        b.box(0.08f, 0.5f, 9f, c("c03020"), x + 1.2f, 2.4f, 0);
-                    }
-                    b.cyl(0.18f, 0.18f, 12, 8, c("777777"), 0, 0.5f, -6, 0, 0, PI / 2);
-                    r = 8; hr = 2.4f;
-                }
-            }
-            Node3 g0 = new Node3();
-            Node3 body = new Node3(b.mesh(), Models.MAT_HULL); body.castShadow = true; g0.add(body);
-            if (!gl.empty()) g0.add(new Node3(gl.mesh(), Models.MAT_GLOW));
-            MB.hq = false;
-            c = new Target(); c.g = g0; c.r = r; c.hr = hr;
+            Object[] o = Targets.build(kind, theme);
+            c = new Target(); c.g = (Node3) o[0]; c.r = (Float) o[2]; c.hr = (Float) o[3];
+            if (o[1] != null) ((Node3) o[1]).name = "spin";
             tgCache.put(key, c);
         }
         Target t = new Target(); t.g = c.g.cloneTree(); t.r = c.r; t.hr = c.hr;
+        t.spin = t.g.find("spin");
         return t;
     }
 

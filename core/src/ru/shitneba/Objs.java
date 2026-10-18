@@ -16,6 +16,11 @@ public final class Objs {
     static final java.util.Map<String, Mesh3[]> cache = new java.util.HashMap<>();
 
     public static Obj make(String kind) {
+        if (kind.equals("radar")) {
+            SModels.Target t = SModels.target("radar", "dusk");
+            Obj o = new Obj(); o.g = t.g; o.spin = t.spin;
+            return o;
+        }
         Mesh3[] ms = cache.get(kind);
         if (ms == null) {
             ms = new Mesh3[2];

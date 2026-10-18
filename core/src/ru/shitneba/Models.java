@@ -54,6 +54,17 @@ public final class Models {
         MAT_NOSE = Mat.std(c("9fa39a")); MAT_NOSE.rough = 0.35f; MAT_NOSE.metal = 0.3f;
     }
 
+    static final Map<Mat, Mat> upCache = new HashMap<>();
+
+    /** Тот же материал без пыли «снизу» (для башни и всего, что на ней: их высота считается не от земли). */
+    static Mat upMat(Mat m) {
+        Mat u = upCache.get(m);
+        if (u != null) return u;
+        u = m.cpy(); u.dust = 0f;
+        upCache.put(m, u);
+        return u;
+    }
+
     public static Mat camoMat(String id) {
         Mat m = camoMats.get(id);
         if (m != null) return m;
@@ -134,6 +145,42 @@ public final class Models {
     }
 
     static final float[] S2 = {-1f, 1f};
+
+    /**
+     * Корпус гусеничной машины (как у «Шилки» и «Тора»): нос с двумя бронелистами (верхний пологий, нижний крутой),
+     * плоская крыша, наклонные борта надгусеничных ниш, полки над гусеницами с фальшбортом, корма с решёткой.
+     * L — длина по гусенице, y0/y1 — низ и крыша корпуса, w — полуширина крыши.
+     */
+    static void hullT(MB C, MB D, MB M, float L, float y0, float y1, float w) {
+        float h = y1 - y0, f = L / 2 + 0.15f, r = -L / 2 - 0.05f;
+        // центральный корпус: профиль сбоку (вперёд — +), нос из двух листов
+        C.extrude(new float[][]{{f - 0.35f, 0}, {r + 0.25f, 0}, {r, 0.3f}, {r, h - 0.08f}, {r + 0.12f, h}, {f - 1.6f, h}, {f, h * 0.42f}, {f + 0.02f, h * 0.3f}},
+                w * 2f, WHITE, 0, y0, 0);
+        // наклонные борта над гусеницами (от кромки крыши вниз-наружу к полке)
+        float shelf = 1.12f;
+        for (float s : S2) {
+            float ang = 0.3f, hh = (y1 - shelf) / (float) Math.cos(ang), ww = (y1 - shelf) * (float) Math.tan(ang);
+            C.extrude(new float[][]{{f - 1.62f, hh}, {f - 0.1f, hh * 0.38f}, {f - 0.1f, 0}, {r + 0.15f, 0}, {r + 0.15f, hh - 0.05f}, {r + 0.25f, hh}},
+                    0.08f, WHITE, s * (w + ww), shelf, 0, 0, 0, s * ang);
+            // ниша под бортом заполнена, чтобы сквозь щель не было видно неба
+            C.box(ww + 0.05f, hh * 0.6f, L - 0.3f, WHITE, s * (w + ww / 2f), shelf + hh * 0.3f, -0.05f);
+            // полка над гусеницей и фальшборт с крепёжными уголками
+            C.box(0.8f, 0.05f, L + 0.15f, WHITE, s * (w + 0.38f), shelf, -0.05f);
+            C.box(0.035f, 0.18f, L + 0.1f, WHITE, s * (w + 0.77f), shelf + 0.06f, -0.05f);
+            for (int i = 0; i < 7; i++) M.box(0.05f, 0.05f, 0.08f, GUN, s * (w + 0.78f), shelf - 0.04f, -L / 2 + 0.4f + i * (L - 0.8f) / 6f);
+            // передние брызговики
+            C.extrude(new float[][]{{0, 0}, {0.55f, -0.35f}, {0.6f, -0.32f}, {0.06f, 0.04f}}, 0.66f, WHITE, s * (w + 0.38f), shelf, -f + 0.25f, 0, PI, 0);
+        }
+        // шов нижнего лобового листа и буксирные крюки
+        D.box(w * 2f + 0.02f, 0.04f, 0.04f, DARK, 0, y0 + h * 0.42f, -f - 0.01f);
+        for (float s : S2) {
+            M.box(0.1f, 0.18f, 0.22f, GUN, s * (w - 0.35f), y0 + h * 0.22f, -f + 0.05f);
+            M.torus(0.09f, 0.03f, GUN, s * (w - 0.35f), y0 + h * 0.08f, -f - 0.02f, 0, 0, PI / 2);
+            M.box(0.1f, 0.18f, 0.22f, GUN, s * (w - 0.35f), y0 + 0.4f, -r + 0.02f);
+        }
+        // кромка крыши (сварной шов) по периметру
+        for (float s : S2) M.box(0.04f, 0.03f, L - 1.4f, GUN, s * (w - 0.02f), y1 + 0.01f, 0.65f);
+    }
 
     static void pantsir(Parts P, Array<Vector3> barrels, Array<Vector3> noses) {
         MB C = P.g("root", "c"), D = P.g("root", "d"), M = P.g("root", "m"), Gl = P.g("root", "g"), L = P.g("root", "l"), R = P.g("root", "r");
@@ -259,11 +306,8 @@ public final class Models {
     static void shilka(Parts P, Array<Vector3> barrels, Array<Vector3> noses) {
         MB C = P.g("root", "c"), D = P.g("root", "d"), M = P.g("root", "m"), Gl = P.g("root", "g"), L = P.g("root", "l");
         tracks2(P, 7.0f, 1.45f);
-        C.extrude(new float[][]{{-3.3f, 0}, {3.0f, 0}, {3.55f, 0.45f}, {2.3f, 1.28f}, {-3.1f, 1.28f}, {-3.5f, 0.7f}}, 2.3f, WHITE, 0, 0.9f, 0);
-        for (float s : S2) C.extrude(new float[][]{{-3.2f, 0}, {2.9f, 0}, {2.3f, 0.32f}, {-3.0f, 0.36f}}, 0.7f, WHITE, s * 1.45f, 1.8f, 0, 0, 0, -s * 0.42f);
+        hullT(C, D, M, 7.0f, 0.75f, 2.18f, 1.08f);
         for (float s : S2) {
-            C.box(0.78f, 0.05f, 6.9f, WHITE, s * 1.47f, 1.12f, -0.1f);
-            C.box(0.04f, 0.42f, 6.6f, WHITE, s * 1.84f, 0.92f, 0f);
             C.box(0.5f, 0.35f, 1.2f, WHITE, s * 1.45f, 1.32f, 2.2f);
             L.box(0.2f, 0.2f, 0.06f, c("fff3d0"), s * 0.8f, 1.65f, -3.42f);
             rail(M, V(s * 0.65f, 1.55f, -3.5f), V(s * 0.95f, 1.55f, -3.5f)); rail(M, V(s * 0.65f, 1.8f, -3.45f), V(s * 0.95f, 1.8f, -3.45f));
@@ -306,50 +350,99 @@ public final class Models {
     static void tor(Parts P, Array<Vector3> barrels, Array<Vector3> noses) {
         MB C = P.g("root", "c"), D = P.g("root", "d"), M = P.g("root", "m"), L = P.g("root", "l");
         tracks2(P, 7.2f, 1.5f);
-        C.extrude(new float[][]{{-3.4f, 0}, {3.1f, 0}, {3.65f, 0.5f}, {2.4f, 1.32f}, {-3.2f, 1.32f}, {-3.6f, 0.7f}}, 2.4f, WHITE, 0, 0.9f, 0);
-        for (float s : S2) C.extrude(new float[][]{{-3.3f, 0}, {3.0f, 0}, {2.4f, 0.32f}, {-3.1f, 0.36f}}, 0.72f, WHITE, s * 1.5f, 1.82f, 0, 0, 0, -s * 0.42f);
+        hullT(C, D, M, 7.2f, 0.75f, 2.22f, 1.12f);
         for (float s : S2) {
-            C.box(0.8f, 0.05f, 7.1f, WHITE, s * 1.52f, 1.12f, -0.1f);
-            C.box(0.04f, 0.42f, 6.8f, WHITE, s * 1.9f, 0.92f, 0f);
-            C.box(0.55f, 0.4f, 1.6f, WHITE, s * 1.5f, 1.35f, 2.0f);
+            C.box(0.55f, 0.4f, 1.6f, WHITE, s * 1.52f, 1.35f, 2.0f);
             L.box(0.2f, 0.2f, 0.06f, c("fff3d0"), s * 0.85f, 1.7f, -3.52f);
             M.box(0.12f, 0.12f, 0.2f, GUN, s * 0.7f, 1.0f, -3.65f);
             L.box(0.14f, 0.1f, 0.05f, c("d0201a"), s * 1.0f, 1.85f, 3.52f);
         }
         D.box(1.8f, 0.06f, 1.2f, c("2a2d24"), 0, 2.22f, 2.6f);
         for (int i = 0; i < 7; i++) M.box(1.7f, 0.04f, 0.05f, GUN, 0, 2.25f, 2.1f + i * 0.16f);
-        MB TC = P.g("turret", "c"), TD = P.g("turret", "d"), TM = P.g("turret", "m"), TG = P.g("turret", "g");
+        // ---- башня как у «Тора»: высокая бронированная коробка, сверху сзади — поисковая РЛС ----
+        MB TC = P.g("turret", "c"), TD = P.g("turret", "d"), TM = P.g("turret", "m"), TG = P.g("turret", "g"), TL = P.g("turret", "l");
         TM.cyl(1.55f, 1.55f, 0.12f, 28, GUN, 0, 0.06f, 0);
-        TC.cyl(1.55f, 1.7f, 0.4f, 28, WHITE, 0, 0.25f, 0);
-        TC.extrude(new float[][]{{-1.5f, 0}, {1.4f, 0}, {1.85f, 0.5f}, {1.3f, 1.0f}, {-1.3f, 1.0f}, {-1.65f, 0.5f}}, 2.9f, WHITE, 0, 0.4f, 0.2f);
-        TC.cyl(0.55f, 0.55f, 0.35f, 24, WHITE, 0, 0.9f, -1.35f, PI / 2, 0, 0); TD.cyl(0.5f, 0.5f, 0.04f, 24, c("2a2f35"), 0, 0.9f, -1.53f, PI / 2, 0, 0);
-        TC.box(0.4f, 0.35f, 0.4f, WHITE, 0.95f, 1.4f, -0.9f); TG.box(0.28f, 0.16f, 0.03f, GLASS, 0.95f, 1.42f, -1.11f);
-        for (float s : S2) rail(TM, V(s * 1.2f, 1.42f, 1.5f), V(s * 1.2f, 1.42f, -0.4f));
-        MB RC = P.g("radar", "c"), RD = P.g("radar", "d"), RM = P.g("radar", "m");
-        RM.cyl(0.12f, 0.12f, 0.7f, 10, GUN, 0, 0.3f, 0);
-        RC.box(2.4f, 0.9f, 0.18f, WHITE, 0, 0.95f, 0);
-        RD.box(2.2f, 0.72f, 0.04f, c("2a2e33"), 0, 0.95f, -0.11f);
-        for (int i = 0; i < 7; i++) RM.box(0.025f, 0.7f, 0.03f, GUN, -0.93f + i * 0.31f, 0.95f, -0.13f);
-        MB PC = P.g("pitch", "c"), PD = P.g("pitch", "d"), PM = P.g("pitch", "m");
-        PC.extrude(new float[][]{{-1.4f, -0.7f}, {1.6f, -0.7f}, {1.6f, 0.9f}, {-1.4f, 0.9f}}, 2.6f, WHITE);
-        PD.box(2.62f, 0.05f, 3.0f, OLIVE_D, 0, 0, -0.1f);
-        for (int r = 0; r < 2; r++) for (int cc = 0; cc < 4; cc++) {
-            float x = -0.9f + cc * 0.6f, y = -0.32f + r * 0.62f;
-            PD.cyl(0.24f, 0.24f, 0.08f, 16, OLIVE_D, x, y, -1.6f, PI / 2, 0, 0);
-            PD.cyl(0.2f, 0.2f, 0.06f, 14, c("1a1a1a"), x, y, -1.63f, PI / 2, 0, 0);
-            noses.add(V(x, y, -1.6f));
+        TC.cyl(1.5f, 1.62f, 0.32f, 28, WHITE, 0, 0.26f, 0);
+        // корпус башни: профиль сбоку (вперёд +), передний скос под качающуюся часть
+        TC.extrude(new float[][]{{1.2f, 0}, {-1.95f, 0}, {-2.05f, 0.25f}, {-2.05f, 1.55f}, {-1.85f, 1.7f}, {0.55f, 1.7f}, {0.75f, 1.35f}, {1.45f, 0.6f}, {1.45f, 0.25f}},
+                2.7f, WHITE, 0, 0.42f, 0.2f);
+        // навесные бронекоробки по бортам, лючки, поручни
+        for (float s : S2) {
+            TC.box(0.32f, 0.95f, 2.3f, WHITE, s * 1.48f, 0.98f, 1.05f);
+            TD.box(0.02f, 0.75f, 2.0f, c("2f3528"), s * 1.645f, 0.98f, 1.05f);
+            for (int i = 0; i < 3; i++) TM.box(0.04f, 0.04f, 0.04f, RIVET, s * 1.65f, 1.35f, 0.3f + i * 0.75f);
+            rail(TM, V(s * 1.15f, 2.2f, 1.9f), V(s * 1.15f, 2.2f, 0.3f));
+            for (float z : new float[]{1.9f, 0.3f}) rail(TM, V(s * 1.15f, 2.12f, z), V(s * 1.15f, 2.2f, z));
+            // блоки отстрела дымовых гранат
+            TD.box(0.3f, 0.3f, 0.5f, OLIVE_D, s * 1.45f, 1.62f, -0.55f);
+            for (int i = 0; i < 3; i++) TM.cyl(0.06f, 0.06f, 0.3f, 8, GUN, s * 1.55f, 1.7f, -0.7f + i * 0.15f, 0.6f, 0, -s * 0.8f);
         }
-        for (float s : S2) PM.cyl(0.14f, 0.14f, 0.4f, 10, GUN, s * 1.4f, 0, 0, 0, 0, PI / 2);
+        // крыша: люки, командирская башенка с приборами, ТВ-оптика
+        hatch(TC, TM, V(-0.6f, 2.15f, 1.3f), 0.32f);
+        TC.cyl(0.42f, 0.46f, 0.25f, 18, WHITE, 0.55f, 2.25f, 1.1f);
+        for (int i = 0; i < 4; i++) { float a = -0.9f + i * 0.6f; TG.box(0.14f, 0.07f, 0.02f, GLASS, 0.55f + MathUtils.sin(a) * 0.44f, 2.3f, 1.1f - MathUtils.cos(a) * 0.44f, 0, a, 0); }
+        TC.box(0.5f, 0.42f, 0.5f, WHITE, -0.95f, 2.28f, 0.0f); TG.box(0.34f, 0.24f, 0.02f, GLASS, -0.95f, 2.3f, -0.26f);
+        // задняя стенка: электроника, люк, фильтровентиляция
+        TD.box(1.8f, 0.6f, 0.04f, c("2b3026"), 0, 1.25f, 2.27f);
+        for (int i = 0; i < 6; i++) TM.box(1.7f, 0.03f, 0.05f, GUN, 0, 1.0f + i * 0.1f, 2.3f);
+        TC.cyl(0.25f, 0.25f, 0.3f, 14, WHITE, 1.0f, 1.6f, 2.32f, PI / 2, 0, 0);
+        // ниши для вертикальных пусковых модулей — крышки в два ряда (ракеты стартуют из качалки)
+        for (int i = 0; i < 4; i++) for (float s : S2) {
+            TD.box(0.36f, 0.04f, 0.36f, c("3d4434"), s * 0.4f, 2.13f, 0.3f + i * 0.42f);
+            TM.box(0.3f, 0.03f, 0.04f, GUN, s * 0.4f, 2.16f, 0.3f + i * 0.42f);
+        }
+        TL.box(0.12f, 0.08f, 0.08f, c("ff3020"), 1.2f, 2.2f, 2.1f);
+        // ---- поисковая РЛС: изогнутое (параболическое) зеркало на кронштейне, облучатель ----
+        MB RC = P.g("radar", "c"), RD = P.g("radar", "d"), RM = P.g("radar", "m");
+        RM.cyl(0.16f, 0.2f, 0.75f, 12, GUN, 0, 0.38f, 0);
+        RM.box(0.9f, 0.18f, 0.4f, GUN, 0, 0.78f, 0);
+        int segs = 9;
+        float W = 2.8f, Hh = 1.0f;
+        for (int i = 0; i < segs; i++) {
+            float t = (i + 0.5f) / segs - 0.5f;
+            float y = 1.3f + t * Hh * 1.05f, z = -0.15f * (t * t) * 4f + 0.12f;
+            float ang = t * 0.6f;
+            RC.box(W, Hh / segs + 0.012f, 0.08f, WHITE, 0, y, z, ang, 0, 0);
+            RD.box(W - 0.15f, Hh / segs - 0.02f, 0.02f, c("2a2f35"), 0, y, z - 0.05f, ang, 0, 0);
+        }
+        for (float s : S2) RC.box(0.08f, Hh + 0.1f, 0.3f, WHITE, s * (W / 2 + 0.03f), 1.3f, 0.05f);
+        for (float s : S2) RM.seg(V(s * 0.9f, 0.85f, 0f), V(s * 1.35f, 1.3f - Hh / 2f, 0.1f), 0.04f, 0.04f, 6, GUN);
+        RM.seg(V(0, 1.3f, -0.2f), V(0, 1.3f, -0.85f), 0.025f, 0.025f, 6, GUN);
+        RD.box(0.4f, 0.16f, 0.16f, c("2a2f35"), 0, 1.3f, -0.9f);
+        // ---- качающаяся часть: антенна сопровождения (фазированная решётка) и два блока по 4 ракеты ----
+        MB PC = P.g("pitch", "c"), PD = P.g("pitch", "d"), PM = P.g("pitch", "m"), PG = P.g("pitch", "g");
+        for (float s : S2) PM.cyl(0.14f, 0.14f, 0.4f, 10, GUN, s * 1.45f, 0, 0, 0, 0, PI / 2);
+        // центральный блок антенны: восьмигранная рамка, «соты» решётки, оптика снизу
+        PC.box(1.5f, 1.5f, 0.9f, WHITE, 0, 0.15f, -0.35f);
+        PC.cyl(0.78f, 0.82f, 0.18f, 8, WHITE, 0, 0.18f, -0.85f, PI / 2, PI / 8, 0);
+        PD.cyl(0.66f, 0.66f, 0.03f, 8, c("2b3036"), 0, 0.18f, -0.95f, PI / 2, PI / 8, 0);
+        for (int i = 0; i < 7; i++) for (int j = 0; j < 7; j++) {
+            float x = -0.42f + i * 0.14f, y = -0.24f + j * 0.14f;
+            if (x * x + (y - 0.18f) * (y - 0.18f) + 0.18f * 0.18f > 0.62f * 0.62f) continue;
+            PM.box(0.1f, 0.1f, 0.02f, c("3a4048"), x, y, -0.975f);
+        }
+        PC.box(0.6f, 0.36f, 0.4f, WHITE, 0, -0.75f, -0.75f); PG.box(0.42f, 0.22f, 0.02f, GLASS, 0, -0.75f, -0.96f);
+        // пусковые блоки по бокам: 2×2 квадратных контейнера с крышками
+        for (float s : S2) {
+            float px = s * 1.05f;
+            PC.box(0.7f, 1.4f, 1.6f, WHITE, px, 0.0f, -0.2f);
+            for (int r = 0; r < 2; r++) for (int cc = 0; cc < 2; cc++) {
+                float x = px + (cc - 0.5f) * 0.32f, y = 0.32f - r * 0.62f;
+                PD.box(0.28f, 0.28f, 0.06f, OLIVE_D, x, y, -1.02f);
+                PD.box(0.22f, 0.22f, 0.03f, c("1a1a1a"), x, y, -1.05f);
+                PM.box(0.3f, 0.03f, 0.05f, GUN, x, y + 0.15f, -1.03f);
+                noses.add(V(x, y, -1.0f));
+            }
+            for (int i = 0; i < 3; i++) PM.box(0.04f, 1.42f, 0.04f, GUN, px + s * 0.36f, 0, -0.85f + i * 0.5f);
+        }
     }
 
     static void luch(Parts P, Array<Vector3> barrels, Array<Vector3> noses) {
         MB C = P.g("root", "c"), D = P.g("root", "d"), M = P.g("root", "m"), L = P.g("root", "l");
         tracks2(P, 7.0f, 1.5f);
-        C.extrude(new float[][]{{-3.3f, 0}, {3.0f, 0}, {3.55f, 0.45f}, {2.3f, 1.22f}, {-3.1f, 1.22f}, {-3.5f, 0.65f}}, 2.5f, WHITE, 0, 0.9f, 0);
-        for (float s : S2) C.extrude(new float[][]{{-3.2f, 0}, {2.9f, 0}, {2.3f, 0.3f}, {-3.0f, 0.34f}}, 0.66f, WHITE, s * 1.52f, 1.75f, 0, 0, 0, -s * 0.42f);
+        hullT(C, D, M, 7.0f, 0.75f, 2.12f, 1.12f);
         for (float s : S2) {
-            C.box(0.75f, 0.05f, 6.9f, WHITE, s * 1.5f, 1.12f, -0.1f);
-            C.box(0.6f, 0.55f, 1.4f, WHITE, s * 1.45f, 1.45f, 2.2f);
+            C.box(0.6f, 0.55f, 1.4f, WHITE, s * 1.52f, 1.45f, 2.2f);
             L.box(0.2f, 0.18f, 0.06f, c("fff3d0"), s * 0.85f, 1.65f, -3.42f);
             L.box(0.14f, 0.1f, 0.05f, c("d0201a"), s * 1.0f, 1.8f, 3.42f);
             for (int i = 0; i < 4; i++) M.box(0.05f, 0.42f, 1.2f, GUN, s * (1.25f + i * 0.12f), 1.5f, 2.2f);
@@ -580,15 +673,12 @@ public final class Models {
                     lampGuard(L, M, V(s * 0.85f, 1.7f, -3.55f));
                     reflectors(L, V(s * 1.5f, 1.5f, 3.53f), c("ff6a00"));
                     number(D, "304", V(s * 1.96f, 1.2f, 0f), s, 0.3f);
-                    smoke(TM, TD, V(s * 1.55f, 1.05f, -1.1f), s, 4);
-                    antenna(TM, V(s * 1.15f, 1.37f, 1.6f), 2.6f, V(0, 0, 0.4f));
+                    antenna(TM, V(s * 1.15f, 2.13f, 1.95f), 2.6f, V(0, 0, 0.4f));
                     bolts(TM, V(s * 1.46f, 0.75f, -1.2f), V(s * 1.46f, 0.75f, 1.4f), 7, 0, 0, PI / 2, 0.035f);
                 }
                 for (int i = 0; i < 3; i++) periscope(M, Gl, V(-0.6f + i * 0.55f, 2.25f, -3.0f));
                 hatch(C, M, V(-0.7f, 2.22f, -2.3f), 0.3f);
                 grille(M, D, V(0, 2.24f, 1.2f), 1.5f, 0.9f, 7);
-                hatch(TC, TM, V(-0.5f, 1.37f, 0.6f), 0.3f);
-                sensor(TD, TG, V(0.95f, 1.65f, -0.9f), 0.2f);
                 break;
             case "luch": {
                 for (float s : S2) {
@@ -693,13 +783,18 @@ public final class Models {
         detail(kind, P);
         Map<String, Mat> mats = new HashMap<>();
         mats.put("c", cm); mats.put("d", MAT_PAINT); mats.put("m", MAT_METAL); mats.put("r", MAT_RUBBER); mats.put("g", MAT_GLASS); mats.put("l", MAT_LAMP);
+        // у башни, качалки и радара высота считается от их собственного основания, а не от земли —
+        // с обычной «пылью снизу» они целиком серели; им — материалы с лёгкой пылью
+        Map<String, Mat> upMats = new HashMap<>(mats);
+        upMats.put("c", upMat(cm)); upMats.put("d", upMat(MAT_PAINT)); upMats.put("m", upMat(MAT_METAL));
         for (Map.Entry<String, Map<String, MB>> e : P.d.entrySet()) {
+            Map<String, Mat> mm = e.getKey().equals("root") ? mats : upMats;
             for (Map.Entry<String, MB> k : e.getValue().entrySet()) {
                 MB b = k.getValue();
                 String key = k.getKey();
                 b.noAo = key.equals("l") || key.equals("g");
                 if (b.empty()) continue;
-                Node3 mi = new Node3(b.mesh(), mats.get(key));
+                Node3 mi = new Node3(b.mesh(), mm.get(key));
                 mi.castShadow = key.equals("c") || key.equals("d") || key.equals("r") || key.equals("m");
                 nodes.get(e.getKey()).add(mi);
             }
