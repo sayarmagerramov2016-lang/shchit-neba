@@ -1,0 +1,8 @@
+.gradle/
+build/
+*/build/
+local.properties
+lwjgl3/save3d.json
+*.txt.log
+.idea/
+android/libs/

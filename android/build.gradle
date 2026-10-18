@@ -1,0 +1,60 @@
+apply plugin: 'com.android.application'
+android {
+    namespace 'ru.shitneba'
+    compileSdk 34
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['../core/assets']
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+    defaultConfig {
+        applicationId 'ru.shitneba3d'
+        minSdk 21
+        targetSdk 34
+        versionCode 312
+        versionName '3.1.2'
+    }
+    signingConfigs {
+        release {
+            storeFile file('shitneba.keystore')
+            storePassword 'shitneba123'
+            keyAlias 'shitneba'
+            keyPassword 'shitneba123'
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+configurations { natives }
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
+    ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'].each { abi ->
+        natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-$abi"
+        natives "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-$abi"
+    }
+}
+tasks.register('copyAndroidNatives') {
+    doFirst {
+        configurations.natives.copy().files.each { jar ->
+            ['armeabi-v7a', 'arm64-v8a', 'x86_64', 'x86'].find { abi ->
+                if (jar.name.endsWith("natives-${abi}.jar")) {
+                    def outDir = file("libs/$abi"); outDir.mkdirs()
+                    copy { from zipTree(jar); into outDir; include '*.so' }
+                    return true
+                }
+                return false
+            }
+        }
+    }
+}
+tasks.matching { it.name.contains('merge') && it.name.contains('JniLibFolders') }.configureEach { dependsOn 'copyAndroidNatives' }

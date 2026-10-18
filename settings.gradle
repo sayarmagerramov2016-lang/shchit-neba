@@ -1,0 +1,2 @@
+rootProject.name = 'shchit-neba'
+include 'core', 'lwjgl3', 'android'
