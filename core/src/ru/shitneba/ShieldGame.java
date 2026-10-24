@@ -359,6 +359,12 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             {"fx_boss", "1.3"}, {"fx_boss2", "1.2"}, {"fx_after", "2"}, {"fx_dusk", "1"}, {"fx_night", "1.5"}, {"fx_storm", "1.2"}, {"fx_bolt", "0.1"},
             {"fx_nboom", "0.15"}, {"end", "0"}};
 
+    /** 3.7.0: операторы — окно, кейсы, рулетка, девчонка в бою, умения, спасение Валькирии. */
+    public static final String[][] SEQ_OPS = {
+            {"menu", "3"}, {"ops", "1.5"}, {"opshop", "1.5"}, {"opshop2", "1"}, {"oproll1", "1.6"}, {"oproll2", "6"},
+            {"op_play", "9"}, {"op_abil", "0.35"}, {"op_abil2", "1.6"}, {"op_hit", "0.25"}, {"op_rin", "8"}, {"op_rinab", "0.5"},
+            {"op_elka", "8"}, {"op_elkab", "0.12"}, {"op_valk", "8"}, {"op_low", "1.2"}, {"op_save", "0.4"}, {"op_die", "5"}, {"end", "0"}};
+
     /** Проверка объектов кампании: плотина, колонна, подстанция, радар — камера смотрит на объект. */
     public static final String[][] SEQ_OBJ = {
             {"menu", "3"}, {"o_dam", "3"}, {"o_convoy", "4"}, {"o_sub", "3"}, {"o_radar", "3"}, {"end", "0"}};
@@ -443,6 +449,23 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "djoin": ui.debugDuelJoin("127.0.0.1"); break;
             case "dj2": duel.sendPick("gunship"); break;
             case "dh2": duel.begin(); break;
+            case "ops": G.SV.c = 20000; G.SV.opOwn.add("liza"); G.SV.opOwn.add("akira"); G.SV.opOwn.add("rin"); G.SV.opSel = "akira";
+                G.SV.opXp.put("akira", 900); G.SV.opXp.put("liza", 130); ui.show("ops"); break;
+            case "opshop": ui.op.tab = 1; break;
+            case "opshop2": G.SV.opAlt.add("akira"); break;
+            case "oproll1": ui.op.tab = 0; ui.op.debugRoll(2); break;
+            case "oproll2": break;
+            case "op_play": G.SV.tut = true; G.SV.opSel = "akira"; ui.launch("endless"); break;
+            case "op_abil": game.opCd = 0; game.useOp(); break;
+            case "op_hit": game.hitTarget("base", 3f); break;
+            case "op_rin": game.quitBattle(); G.SV.opSel = "rin"; ui.launch("endless"); break;
+            case "op_rinab": game.opCd = 0; game.useOp(); break;
+            case "op_elka": game.quitBattle(); G.SV.opOwn.add("elka"); G.SV.opSel = "elka"; ui.launch("endless"); break;
+            case "op_elkab": game.opCd = 0; game.useOp(); break;
+            case "op_valk": game.quitBattle(); G.SV.opOwn.add("valk"); G.SV.opSel = "valk"; G.SV.opXp.put("valk", 3800); G.SV.opAlt.add("valk"); ui.launch("endless"); break;
+            case "op_low": game.hp = game.st("maxHp") * 0.2f; game.hitTarget("base", 1f); break;
+            case "op_save": forceDie(); break;
+            case "op_die": game.opInvT = 0; forceDie(); break;
             case "o_dam": G.SV.tut = true; ui.debugLaunch("2-1"); break;
             case "o_convoy": game.quitBattle(); ui.debugLaunch("2-4"); break;
             case "o_sub": game.quitBattle(); ui.debugLaunch("5-2"); break;

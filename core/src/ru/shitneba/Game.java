@@ -61,6 +61,10 @@ public class Game {
     public final Map<String, Boolean> abUsed = new LinkedHashMap<>();
     public final Map<String, Float> abCd = new LinkedHashMap<>();
     public float smokeT, repairT, empT;
+    // ---------- оператор (девчонка рядом с комплексом) ----------
+    public Ops.Op op;
+    public float opCd, opCdMax, opRadarT, opLuckT, opOverT, opRushT, opInvT;
+    boolean opSaved, opLow;
     int scoutQ; float scoutT; int squads; float squadT; boolean bossWave, bossSpawned; int bossAt, spawned;
     int nohitWaves;
     public final Array<Models.Mog> mogs = new Array<>();
@@ -167,6 +171,104 @@ public class Game {
 
     float rr(float a, float b) { return a + R.nextFloat() * (b - a); }
 
+    void opEv(String ev) { if (op != null && ui != null) ui.opEvent(ev); }
+
+    /** Множитель урона от умений оператора (Радар, Рывок самурая). */
+    float opDmgMul() { return (opRadarT > 0 ? 1.3f : 1f) * (opRushT > 0 ? 2f : 1f); }
+
+    /** Множитель скорострельности (Перегрузка, Рывок самурая). */
+    public float opRateMul() { return (opOverT > 0 ? 1.6f : 1f) * (opRushT > 0 ? 1.3f : 1f); }
+
+    void opReset() {
+        op = mode.equals("duel") ? null : Ops.sel();
+        opCdMax = op != null ? Ops.cdOf(op) : 0;
+        opCd = op != null ? 4f : 0;
+        opRadarT = 0; opLuckT = 0; opOverT = 0; opRushT = 0; opInvT = 0; opSaved = false; opLow = false;
+    }
+
+    /** Умение оператора (кнопка с портретом, на ПК — Q). */
+    public void useOp() {
+        if (op == null || !state.equals("run") || opCd > 0 || netView) return;
+        opCd = opCdMax;
+        float mh = st("maxHp");
+        switch (op.id) {
+            case "liza":
+                hp = Math.min(mh, hp + mh * 0.2f);
+                FX.glow(tmpV.set(0, 3, 0), 9f, new Color(0.4f, 1, 0.5f, 1), 0.6f);
+                break;
+            case "katya":
+                heat = 0; overheated = false;
+                if (st("maxMis") > 0) { missiles = Math.min((int) st("maxMis"), missiles + 2); syncNoses(); }
+                FX.puff(tmpV.set(0, 4, 0), 3f, new Color(0.9f, 0.9f, 0.9f, 1), 0.5f, 3f, 2f);
+                break;
+            case "sonya":
+                smokeT = Math.max(smokeT, 5f);
+                for (int i = 0; i < 18; i++) {
+                    float a = R.nextFloat() * MathUtils.PI2, r = rr(9, 15);
+                    FX.puff(new Vector3(MathUtils.sin(a) * r, rr(0.5f, 2), MathUtils.cos(a) * r), 5f, new Color(0.75f, 0.76f, 0.74f, 1), 0.45f, 6f, 0.4f);
+                }
+                break;
+            case "anya": opRadarT = 8f; G.sfx("lock", 0.6f); break;
+            case "masha": opLuckT = 8f; G.sfx("coin", 0.8f); break;
+            case "rin": opOverT = 6f; heat = 0; overheated = false; break;
+            case "yuki": empT = Math.max(empT, 4f); G.sfx("emp"); break;
+            case "elka": {
+                List<E> ts = new ArrayList<>();
+                for (E e : enemies) if (!hidden(e) && !(e.type.equals("shell") || e.type.equals("node"))) ts.add(e);
+                Collections.sort(ts, (a, b) -> Float.compare(a.pos.len2(), b.pos.len2()));
+                bolts.clear();
+                Vector3 prev = AIM.cpy().add(0, 2, 0);
+                for (int i = 0; i < Math.min(6, ts.size()); i++) {
+                    E e = ts.get(i);
+                    Vector3 p = visPos(e, new Vector3());
+                    boltAdd(prev, p);
+                    prev = p;
+                    damageEnemy(e, e.boss ? e.max * 0.05f : e.max * 0.75f + 2f, p, "op");
+                }
+                boltT = 0.35f;
+                G.sfx("thunder", 0.7f, 200); G.sfx("emp", 0.5f);
+                break;
+            }
+            case "akira": opRushT = 5f; break;
+            case "sneg":
+                empT = Math.max(empT, 4f); G.sfx("emp");
+                for (E e : new Array<>(enemies)) {
+                    if (hidden(e) || e.type.equals("node")) continue;
+                    FX.glow(visPos(e, tmpV), 4f, new Color(0.7f, 0.9f, 1, 1), 0.5f);
+                    damageEnemy(e, e.boss ? e.max * 0.04f : e.max * 0.5f, null, "op");
+                }
+                break;
+            case "valk":
+                hp = Math.min(mh, hp + mh * 0.25f); opInvT = 3f;
+                FX.glow(tmpV.set(0, 3, 0), 14f, new Color(1, 0.9f, 0.5f, 1), 0.8f);
+                break;
+            default: break;
+        }
+        G.hap(40);
+        if (ui != null) ui.opEvent("abil");
+    }
+
+    void boltAdd(Vector3 a, Vector3 b) {
+        Vector3 prev = a.cpy();
+        for (int i = 1; i <= 6; i++) {
+            float k = i / 6f;
+            Vector3 p = i == 6 ? b.cpy() : a.cpy().lerp(b, k).add(new Vector3(rr(-4, 4), rr(-3, 3), rr(-4, 4)).scl(1f - Math.abs(k - 0.5f) * 1.2f));
+            bolts.add(new float[]{prev.x, prev.y, prev.z, p.x, p.y, p.z});
+            prev = p;
+        }
+        FX.glow(b, 5f, new Color(1, 0.9f, 0.4f, 1), 0.25f); FX.sparks(b, 10, new Color(1, 0.85f, 0.4f, 1));
+    }
+
+    void opTick(float dt) {
+        if (op == null) return;
+        opCd = Math.max(0, opCd - dt);
+        opRadarT = Math.max(0, opRadarT - dt); opLuckT = Math.max(0, opLuckT - dt); opOverT = Math.max(0, opOverT - dt);
+        opRushT = Math.max(0, opRushT - dt); opInvT = Math.max(0, opInvT - dt);
+        float mh = st("maxHp");
+        if (hp < mh * 0.3f && hp > 0 && !opLow) { opLow = true; opEv("low"); }
+        if (hp > mh * 0.4f) opLow = false;
+    }
+
     void later(float t, Runnable r) { Timer tm = new Timer(); tm.t = t; tm.r = r; timers.add(tm); }
 
     // ---------- кошелёк ----------
@@ -228,6 +330,7 @@ public class Game {
         aimYaw = 0; aimPitch = 0.2f; toSpawn = 0; between = 0; bossWave = false; missionTime = 0;
         abUsed.put("salvo", false); abUsed.put("emp", false); abCd.put("smoke", 0f); abCd.put("repair", 0f);
         smokeT = 0; repairT = 0; empT = 0; scoutQ = 0; squads = 0; nohitWaves = 0;
+        opReset();
         duelT = DUEL_TIME; bossCd[0] = 3; bossCd[1] = 6; bossCd[2] = 8; bossSpecT = 0; bossCamPitch = 0.25f;
         bossIn.mx = 0; bossIn.my = 0; bossIn.mz = 0; bossIn.cy = MathUtils.PI; bossIn.f1 = 0; bossIn.f2 = 0; bossIn.sp = 0;
         netMis = 0; for (int i = 0; i < 4; i++) netAb[i] = 0; tut = -1;
@@ -528,6 +631,7 @@ public class Game {
     }
 
     public int addCoins(float n) {
+        if (op != null && (state.equals("run") || state.equals("dying"))) n *= (1 + Ops.coinBonus(op.id)) * (opLuckT > 0 ? 2f : 1f);
         int k = Math.max(1, Math.round(n));
         setCoins(coins() + k); runCoins += k; qProg("coins", k, false);
         return k;
@@ -558,6 +662,7 @@ public class Game {
                 if (p != null && R.nextFloat() < 0.5f) FX.sparks(p, 4, new Color(0.6f, 0.85f, 1, 1));
             }
         }
+        if (!src.equals("op")) dmg *= opDmgMul();
         if (e.stealth) e.reveal = 2.5f;
         if (netView) {
             if (p != null) FX.sparks(p, 3);
@@ -599,6 +704,12 @@ public class Game {
         score += Math.round(D.getFloat("pts") * 10 * (1 + (float) Math.floor(combo / 5f) * 0.1f));
         addCoins(D.getFloat("coin") * difCoin * (mode.equals("endless") ? 2f : 0.5f)); G.sfx("coin", 0.5f, 60);
         combo += 1; comboT = 3f; kills += 1;
+        if (op != null && !(e.type.equals("erk") || e.type.equals("shell") || e.type.equals("node"))) {
+            boolean heavy = e.type.equals("heavy") || e.type.equals("armor") || e.type.equals("mech") || e.type.equals("walker") || e.type.equals("colossus");
+            int lv = Ops.addXp(e.boss ? 15 : (heavy ? 3 : 1));
+            if (lv > 0 && ui != null) ui.toast(op.name + ": дружба " + lv + " ур." + (lv == 5 ? " · открыт второй наряд!" : ""));
+            opEv(e.boss ? "boss" : "kill");
+        }
         statAdd("kills", 1); qProg("kill", 1, false);
         if (e.type.equals("heavy")) qProg("heavy", 1, false);
         if (e.type.equals("kami") || e.type.equals("relay") || e.type.equals("mini")) statAdd("k_" + e.type, 1);
@@ -790,7 +901,7 @@ public class Game {
             E e = enemies.get(i);
             e.t += dt;
             if (e.stealth) {
-                e.reveal = Math.max(0, e.reveal - dt);
+                e.reveal = Math.max(opRadarT > 0 ? 0.3f : 0, e.reveal - dt);
                 boolean vis = !hidden(e);
                 float tr = 1 - e.md.body.alpha;
                 tr = MathUtils.lerp(tr, vis ? 0.25f : 0.86f, Math.min(1f, dt * 6f));
@@ -1154,8 +1265,17 @@ public class Game {
         if (!state.equals("run")) return;
         if ("obj".equals(tgt) && obj != null && obj.hp > 0) { damageObj(dmg); return; }
         if (smokeT > 0) dmg /= 3f;
+        if (opInvT > 0) { FX.sparks(tmpV.set(rr(-1.4f, 1.4f), rr(1.6f, 3.6f), rr(-4, 4)), 6, new Color(1, 0.9f, 0.5f, 1)); return; }
         hp -= dmg; hurtT = 0.5f; shake = Math.max(shake, Math.min(1f, 0.3f + dmg / 20f)); G.hap(45); G.sfx("hit", 0.8f, 80); waveHit = true;
         FX.sparks(tmpV.set(rr(-1.4f, 1.4f), rr(1.6f, 3.6f), rr(-4, 4)), 10);
+        if (hp <= 0 && op != null && op.id.equals("valk") && !opSaved) {
+            // пассивка Валькирии: раз за бой спасает от смерти
+            opSaved = true; hp = st("maxHp") * 0.4f; opInvT = 2f;
+            FX.glow(tmpV.set(0, 3, 0), 18f, new Color(1, 0.9f, 0.5f, 1), 1f);
+            if (ui != null) { ui.opEvent("save"); ui.toast("Ангел-хранитель спас комплекс!"); }
+            return;
+        }
+        if (hp > 0) opEv("hit");
         if (hp <= 0) {
             hp = 0; state = "dying"; deadT = 3.2f;
             explosion(AIM.cpy().add(0, 1, 0), 3); breakVehicle();
@@ -1394,7 +1514,7 @@ public class Game {
         beamUsed = 0;
         boolean on = firing && st("beam") > 0 && !overheated && state.equals("run");
         if (!on) return;
-        heat += st("lheat") * dt;
+        if (opOverT <= 0) heat += st("lheat") * dt;
         if (heat >= 1) { heat = 1; overheated = true; G.sfx("alarm", 0.6f, 900); return; }
         Vector3 from = barrelWorld(0, new Vector3());
         Vector3 dir = new Vector3(aimPoint).sub(from).nor();
@@ -1721,6 +1841,7 @@ public class Game {
         missionT = CM != null ? CM.getFloat("time", 0) : 0; timeSaid = 0; squadMix = null; resReason = "";
         abUsed.put("salvo", false); abUsed.put("emp", false); abCd.put("smoke", 0f); abCd.put("repair", 0f);
         smokeT = 0; repairT = 0; empT = 0; scoutQ = 0; scoutT = 0; squads = 0; squadT = 0; nohitWaves = 0; wxRoll = 0; burnT = 0;
+        opReset();
         syncNoses();
         state = "run";
         if (ui != null) ui.startHud();
@@ -1765,7 +1886,7 @@ public class Game {
                 }
                 ui.banner(String.format("Волна %d/%d", wave, CM.get("waves").size), bossWave, sub);
             }
-            G.sfx(bossWave ? "boss" : "wave");
+            G.sfx(bossWave ? "boss" : "wave"); opEv("wave");
             if (c.has("say") && ui != null) for (JsonValue l = c.get("say").child; l != null; l = l.next) ui.comm(l.getString(0), l.getString(1));
             return;
         }
@@ -1776,7 +1897,7 @@ public class Game {
         toSpawn = Math.round(bossWave ? 4 + wave : 4 + wave * 2.4f); spawned = 0; bossAt = (int) Math.ceil(toSpawn / 2.0);
         spawnInt = Math.max(0.35f, 1.5f - wave * 0.09f); spawnT = 0.4f;
         if (ui != null) ui.banner("Волна " + wave, bossWave, bossWave ? G.D.get("BOSS_INFO").get(bossTypeForWave()).getString("name") : "");
-        G.sfx(bossWave ? "boss" : "wave");
+        G.sfx(bossWave ? "boss" : "wave"); opEv("wave");
         qProg("wave", wave, true); statMax("bestWave", wave);
     }
 
@@ -1968,6 +2089,7 @@ public class Game {
     }
 
     void missionFail(String reason) {
+        opEv("lose");
         BlackBox.log("миссия провалена: " + reason);
         if (!(state.equals("run") || state.equals("dying"))) return;
         if (!mode.equals("campaign")) return;
@@ -1979,6 +2101,7 @@ public class Game {
 
     void gameOver() {
         BlackBox.log("бой окончен · волна " + wave + " · очки " + score);
+        if (!mode.equals("campaign")) opEv("lose");
         if (mode.equals("duel")) { if (duel != null && !netView) duel.finishHost("boss", "Комплекс ПВО уничтожен!"); return; }
         if (mode.equals("campaign")) { state = "run"; missionFail("Комплекс уничтожен"); return; }
         state = "over";
@@ -2152,7 +2275,7 @@ public class Game {
                 fireT -= dt;
                 boolean gunOn = st("gun") > 0 && !VEH.equals("tor");
                 if (firing && gunOn && !overheated) {
-                    while (fireT <= 0) { fireT += 1f / st("rate"); fireBullet(); heat += st("heatPer"); }
+                    while (fireT <= 0) { fireT += 1f / (st("rate") * opRateMul()); fireBullet(); if (opOverT <= 0) heat += st("heatPer"); }
                     if (heat >= 1) { heat = 1; overheated = true; G.sfx("alarm", 0.6f, 900); }
                 } else fireT = Math.max(fireT, 0);
                 if (VEH.equals("tor")) {
@@ -2160,7 +2283,7 @@ public class Game {
                     if (firing && chanT <= 0 && missiles > 0) {
                         E t = (lock.t != null && lock.k >= 0.5f) ? lock.t : null;
                         if (fireMissile(t, false)) {
-                            chanT = st("chan");
+                            chanT = st("chan") / opRateMul();
                             if (R.nextFloat() < st("twin") && missiles > 0) {
                                 E t2 = null;
                                 for (E e : enemies) if (e != t && e.cloak == 0 && angleBetween(aimDir, tA.set(e.pos).sub(camPos)) < 0.5f) { t2 = e; break; }
@@ -2178,6 +2301,7 @@ public class Game {
                 }
                 if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
                 empT = Math.max(0, empT - dt); smokeT = Math.max(0, smokeT - dt);
+                opTick(dt);
                 abCd.put("smoke", Math.max(0, abCd.get("smoke") - dt)); abCd.put("repair", Math.max(0, abCd.get("repair") - dt));
                 if (repairT > 0 && !netView) { repairT -= dt; hp = Math.min(st("maxHp"), hp + st("maxHp") / 3f / 4f * dt); }
                 if (mode.equals("duel")) { if (!netView) duelRules(dt); }

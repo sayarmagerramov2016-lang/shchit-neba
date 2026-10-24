@@ -87,9 +87,10 @@ public class UI implements GameUI, InputProcessor {
     public UI(Game g, Draw d, Host host) {
         this.g = g; this.d = d; this.host = host;
         kit = new Kit(d);
+        op = new OpUI(this);
         DESK = !G.isMobile() && System.getenv("SN_PHONE") == null; // SN_PHONE=1 — интерфейс как на телефоне (для скриншотов магазина)
         String[][] bt = {{"endless", "menu"}, {"garage", "menu"}, {"shop", "menu"}, {"settings", "menu"}, {"about", "menu"},
-                {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}};
+                {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}, {"ops", "menu"}};
         for (String[] b : bt) backTo.put(b[0], b[1]);
     }
 
@@ -114,7 +115,11 @@ public class UI implements GameUI, InputProcessor {
 
     void clearComm() { commQ.clear(); commCur = null; commT = 0; }
 
-    @Override public void startHud() { show(""); clearComm(); hpShown = -1; hpGhost = -1; }
+    @Override public void startHud() { show(""); clearComm(); hpShown = -1; hpGhost = -1; op.reset(); }
+
+    @Override public void opEvent(String ev) { op.event(ev); }
+
+    public final OpUI op;
 
     @Override public void over(boolean rec) { overRec = rec; overDelay = 0.5f; }
 
@@ -280,6 +285,8 @@ public class UI implements GameUI, InputProcessor {
             case "sover": pSOver(); break;
             case "duel": pDuel(); break;
             case "dres": pDRes(); break;
+            case "ops": op.pOps(); break;
+            case "oproll": op.pRoll(); break;
             default: break;
         }
         if (backTo.containsKey(panel) || panel.equals("shop") || (panel.equals("settings"))) backButton();
@@ -712,20 +719,26 @@ public class UI implements GameUI, InputProcessor {
         // --- нижний ряд слева ---
         float lw = px - m - 16, sh = 46;
         int qn = questsReady();
-        String[] nm = {"Задания", "Достижения", "Рекорды", "Улучшения"};
-        String[] ic = {"missions_clipboard_icon", "achievements_trophy_icon", "records_chart_icon", "coin_icon"};
-        float sgp = 7, sw = (lw - sgp * 3) / 4, sy = d.h - m - sh;
-        for (int i = 0; i < 4; i++) {
+        String[] nm = {"Операторы", "Задания", "Достижения", "Рекорды", "Улучшения"};
+        String[] ic = {"star_icon", "missions_clipboard_icon", "achievements_trophy_icon", "records_chart_icon", "coin_icon"};
+        float sgp = 7, sw = (lw - sgp * 4) / 5, sy = d.h - m - sh;
+        for (int i = 0; i < 5; i++) {
             float x = m + i * (sw + sgp);
             if (smallPlate(x, sy, sw, sh, ic[i], nm[i])) {
                 switch (i) {
-                    case 0: show("quests"); break;
-                    case 1: show("ach"); break;
-                    case 2: show("records"); break;
+                    case 0: show("ops"); break;
+                    case 1: show("quests"); break;
+                    case 2: show("ach"); break;
+                    case 3: show("records"); break;
                     default: shopVeh = -1; backTo.put("shop", "menu"); show("shop"); break;
                 }
             }
-            if (i == 0 && qn > 0 && !d.off) {
+            if (i == 0 && OpUI.hasFree() && !d.off) {
+                float bsz = 20 + 2 * MathUtils.sin(T * 5);
+                kit.img("notification_badge", x + sw - bsz * 0.75f, sy - bsz * 0.3f, bsz, bsz);
+                d.text("1", x + sw - bsz * 0.25f, sy + bsz * 0.2f + 4, 11, WHITE, Draw.BOLD, 0);
+            }
+            if (i == 1 && qn > 0 && !d.off) {
                 float bsz = 20 + 2 * MathUtils.sin(T * 5);
                 kit.img("notification_badge", x + sw - bsz * 0.75f, sy - bsz * 0.3f, bsz, bsz);
                 d.text(String.valueOf(qn), x + sw - bsz * 0.25f, sy + bsz * 0.2f + 4, 11, WHITE, Draw.BOLD, 0);
@@ -1564,11 +1577,13 @@ public class UI implements GameUI, InputProcessor {
     void drawHud() {
         Game G0 = g;
         float W = sx(), H = sy();
+        op.drawGirl(W, H, Math.min(0.05f, Gdx.graphics.getDeltaTime()));
         // пауза и магазин
         rrect(PAUSE_R[0], PAUSE_R[1], PAUSE_R[2], PAUSE_R[3], C_PANEL, 0.94f, true);
         d.rect(29, 27, 5, 18, WHITE); d.rect(39, 27, 5, 18, WHITE);
         rrect(SHOP_R[0], SHOP_R[1], SHOP_R[2], SHOP_R[3], C_ACC, 1, false);
         d.text("₽", 36, 101, 24, C("24170a"), Draw.BOLD, 0);
+        op.drawButton();
         // очки
         rrect(72, 12, 170, 70, C_PANEL, 0.94f, true);
         d.rect(72, 16, 3, 62, C_ACC);
@@ -1868,6 +1883,7 @@ public class UI implements GameUI, InputProcessor {
     boolean deskHudClick(float x, float y) {
         if (in(x, y, PAUSE_R[0], PAUSE_R[1], PAUSE_R[2], PAUSE_R[3])) { pause(); return true; }
         if (in(x, y, SHOP_R[0], SHOP_R[1], SHOP_R[2], SHOP_R[3])) { openShopBattle(); return true; }
+        if (op.hitButton(x, y)) { g.useOp(); return true; }
         List<String> ab = abilList();
         for (int i = 0; i < ab.size(); i++) {
             float[] r = abRect(i);
@@ -1903,6 +1919,7 @@ public class UI implements GameUI, InputProcessor {
             else if (vehMis() && Vector2.dst(x, y, mc[0], mc[1]) < 46) { what = "mis"; g.fireMissile("lock", false); }
             else if (in(x, y, PAUSE_R[0], PAUSE_R[1], PAUSE_R[2], PAUSE_R[3])) { what = "ui"; pause(); }
             else if (in(x, y, SHOP_R[0], SHOP_R[1], SHOP_R[2], SHOP_R[3])) { what = "ui"; openShopBattle(); }
+            else if (op.hitButton(x, y)) { what = "ui"; g.useOp(); }
             else {
                 List<String> ab = abilList();
                 for (int i = 0; i < ab.size(); i++) {
@@ -2013,6 +2030,7 @@ public class UI implements GameUI, InputProcessor {
             else if (kc == Input.Keys.E || kc == Input.Keys.R) g.fireMissile("lock", false);
             else if (kc == Input.Keys.ESCAPE || kc == Input.Keys.P) pause();
             else if (kc == Input.Keys.B) openShopBattle();
+            else if (kc == Input.Keys.Q) g.useOp();
             else if (kc == Input.Keys.TAB) mouseFree = !mouseFree;
             else if (kc >= Input.Keys.NUM_1 && kc <= Input.Keys.NUM_4) {
                 List<String> ab = abilList();

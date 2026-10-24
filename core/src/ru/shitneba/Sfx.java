@@ -201,6 +201,9 @@ public class Sfx implements Disposable {
             final float[] cl = {523, 659, 784, 1046};
             put("clear", synth(0.8f, k -> 10f, k -> new float[]{cl[Math.min(3, (int) (k * 4))], 0.35f}));
             put("buzz", buzz());
+            // голосок оператора: два коротких тона вверх-вниз (высота задаётся при проигрывании)
+            put("chirp", synth(0.16f, k -> 10f, k -> new float[]{k < 0.45f ? MathUtils.lerp(700, 980, k / 0.45f) : MathUtils.lerp(1050, 760, (k - 0.45f) / 0.55f), 0.38f}));
+            put("tick", synth(0.03f, k -> 10f, k -> new float[]{1500, 0.3f}));
             final float[] fl = {392, 330, 262};
             put("fail", synth(0.9f, k -> 10f, k -> new float[]{fl[Math.min(2, (int) (k * 3))], 0.35f}));
         } catch (Throwable t) {
@@ -238,6 +241,18 @@ public class Sfx implements Disposable {
         float pitch = 1f + (pv == null ? 0 : (rnd.nextFloat() * 2 - 1) * pv);
         float v = Math.min(1f, Math.max(0.001f, vol) * master);
         if (v > 0.003f) s.play(v, pitch, 0);
+    }
+
+    /** Проиграть с заданной высотой (голоса операторов). */
+    public void playP(String name, float vol, float pitch, int gapMs) {
+        float master = G.SV == null ? 0.8f : G.SV.vol;
+        Sound s = snd.get(name);
+        if (s == null || master <= 0) return;
+        long now = System.currentTimeMillis();
+        Long lt = last.get(name);
+        if (lt != null && now - lt < gapMs) return;
+        last.put(name, now);
+        s.play(Math.min(1f, vol * master), MathUtils.clamp(pitch, 0.5f, 2f), 0);
     }
 
     @Override

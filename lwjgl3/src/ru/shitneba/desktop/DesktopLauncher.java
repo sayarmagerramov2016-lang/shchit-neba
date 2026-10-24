@@ -14,6 +14,7 @@ public class DesktopLauncher {
         if (args.length > 2 && args[2].equals("maps")) ShieldGame.SEQ = ShieldGame.SEQ_MAPS;
         if (args.length > 2 && args[2].equals("store")) ShieldGame.SEQ = ShieldGame.SEQ_STORE;
         if (args.length > 2 && args[2].equals("fx")) ShieldGame.SEQ = ShieldGame.SEQ_FX;
+        if (args.length > 2 && args[2].equals("ops")) ShieldGame.SEQ = ShieldGame.SEQ_OPS;
         if (args.length > 2 && args[2].equals("strike")) ShieldGame.SEQ = ShieldGame.SEQ_STRIKE;
         if (args.length > 2 && args[2].equals("duelhost")) ShieldGame.SEQ = ShieldGame.SEQ_DUELHOST;
         if (args.length > 2 && args[2].equals("dueljoin")) ShieldGame.SEQ = ShieldGame.SEQ_DUELJOIN;

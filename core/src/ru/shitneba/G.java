@@ -16,7 +16,7 @@ import java.util.Map;
 
 /** Глобальные данные: data.json (D), сохранение (SV), звания, утилиты. Порт g.gd. */
 public final class G {
-    public static final String VER = "3.6.0";
+    public static final String VER = "3.7.0";
     public static JsonValue D;
     public static Save SV;
     public static Sfx sfx;
@@ -59,6 +59,12 @@ public final class G {
         public boolean swInv;
         // дуэль
         public String duelName = "";
+        // операторы
+        public final List<String> opOwn = new ArrayList<>();
+        public String opSel = "", opFree = "";
+        public final Map<String, Integer> opXp = new LinkedHashMap<>();
+        public final List<String> opAlt = new ArrayList<>();
+        public int opPity, opCases;
     }
 
     public static void init() {
@@ -153,6 +159,15 @@ public final class G {
                 s.swBest = sw.getInt("best", 0); s.swBestz = sw.getInt("bestz", 0); s.swCam = sw.getInt("cam", 0); s.swInv = sw.getBoolean("inv", false);
             }
             s.duelName = d.getString("duelName", "");
+            JsonValue op = d.get("op");
+            if (op != null) {
+                readList(op.get("own"), s.opOwn, true);
+                readList(op.get("alt"), s.opAlt, true);
+                readIntMap(op.get("xp"), s.opXp);
+                s.opSel = op.getString("sel", ""); s.opFree = op.getString("free", "");
+                s.opPity = op.getInt("pity", 0); s.opCases = op.getInt("cases", 0);
+                if (!s.opOwn.contains(s.opSel)) s.opSel = "";
+            }
         } catch (Throwable t) {
             Gdx.app.error("save", "bad save", t);
             SV = defSave();
@@ -213,6 +228,12 @@ public final class G {
             w.set("best", s.swBest).set("bestz", s.swBestz).set("cam", s.swCam).set("inv", s.swInv);
             w.pop();
             w.set("duelName", s.duelName);
+            w.object("op");
+            w.array("own"); for (String v : s.opOwn) w.value(v); w.pop();
+            w.array("alt"); for (String v : s.opAlt) w.value(v); w.pop();
+            w.object("xp"); for (Map.Entry<String, Integer> e : s.opXp.entrySet()) w.set(e.getKey(), e.getValue()); w.pop();
+            w.set("sel", s.opSel).set("free", s.opFree).set("pity", s.opPity).set("cases", s.opCases);
+            w.pop();
             w.array("top");
             for (Top t : s.top) w.object().set("s", t.s).set("w", t.w).set("d", t.d).set("t", t.t).set("v", t.v).pop();
             w.pop();
@@ -274,6 +295,7 @@ public final class G {
     public static void sfx(String name) { sfx(name, 1f, 30); }
     public static void sfx(String name, float vol) { sfx(name, vol, 30); }
     public static void sfx(String name, float vol, int gapMs) { if (sfx != null) sfx.play(name, vol, gapMs); }
+    public static void sfxP(String name, float vol, float pitch, int gapMs) { if (sfx != null) sfx.playP(name, vol, pitch, gapMs); }
 
     // ---------- утилиты данных ----------
     public static JsonValue d(String... path) {

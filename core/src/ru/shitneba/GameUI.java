@@ -11,4 +11,6 @@ public interface GameUI {
     void result(boolean win);
     void strikeOver();
     void duelResult(boolean lostLink, boolean win, String reason);
+    /** Событие для девчонки-оператора: hit, kill, boss, wave, low, lose, abil, save. */
+    void opEvent(String ev);
 }
