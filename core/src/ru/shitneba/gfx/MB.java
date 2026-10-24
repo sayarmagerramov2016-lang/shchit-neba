@@ -417,4 +417,39 @@ public class MB {
     public static Prim pCyl(float rt, float rb, float h, int seg, boolean caps) { final float a = rt, b = rb, c = h; final int s = seg; final boolean cp = caps; return prim("c" + rt + "_" + rb + "_" + h + "_" + seg + (caps ? "" : "nc"), () -> cylPrim(a, b, c, s, cp)); }
     public static Prim pSph(float r, float h, int radial, int rings) { final float a = r, b = h; final int s = radial, q = rings; return prim("S" + r + "_" + h + "_" + radial + "_" + rings, () -> sphPrim(a, b, s, q)); }
     public static Prim pQuad(float w, float h) { final float a = w, b = h; return prim("q" + w + "_" + h, () -> quadPrim(a, b)); }
+
+    /** Шапка волос: единичная сфера без «окна» для лица (вперёд — −Z): убраны треугольники, где z < -zc и y < yc. */
+    public static Prim pHairCap(final int radial, final int rings, final float zc, final float yc) {
+        return prim("hc" + radial + "_" + rings + "_" + zc + "_" + yc, () -> {
+            Prim s = sphPrim(1f, 2f, radial, rings);
+            com.badlogic.gdx.utils.FloatArray o = new com.badlogic.gdx.utils.FloatArray(s.d.length);
+            for (int t = 0; t < s.n; t += 3) {
+                float cz = 0, cy = 0;
+                for (int k = 0; k < 3; k++) { cy += s.d[(t + k) * 8 + 1]; cz += s.d[(t + k) * 8 + 2]; }
+                cy /= 3; cz /= 3;
+                if (cz < -zc && cy < yc) continue;
+                o.addAll(s.d, t * 8, 24);
+            }
+            Prim p = new Prim(); p.d = o.toArray(); p.n = p.d.length / 8; return p;
+        });
+    }
+
+    /** Лицо: кусок сферы радиуса r спереди (−Z), картинка натянута прямой проекцией.
+     *  x0..x1, y0..y1 — края картинки в долях r (y вверх), n — сетка. */
+    public static Prim pFace(final float r, final float x0, final float x1, final float y0, final float y1, final int n) {
+        return prim("face" + r + "_" + x0 + "_" + x1 + "_" + y0 + "_" + y1 + "_" + n, () -> {
+            PB b = new PB();
+            float[][] g = new float[(n + 1) * (n + 1)][];
+            for (int j = 0; j <= n; j++) for (int i = 0; i <= n; i++) {
+                float u = (float) i / n, w = (float) j / n;
+                float x = MathUtils.lerp(x0, x1, u), y = MathUtils.lerp(y0, y1, w);
+                float q = 1 - x * x - y * y;
+                float z = q > 0.0025f ? -(float) Math.sqrt(q) : -0.05f;
+                g[j * (n + 1) + i] = vtx(x * r, y * r, z * r, x, y, z, u, w);
+            }
+            for (int j = 0; j < n; j++) for (int i = 0; i < n; i++)
+                b.quad(g[j * (n + 1) + i], g[j * (n + 1) + i + 1], g[(j + 1) * (n + 1) + i + 1], g[(j + 1) * (n + 1) + i]);
+            return b.done();
+        });
+    }
 }

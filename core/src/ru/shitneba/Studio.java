@@ -24,6 +24,7 @@ public final class Studio {
     final Vector3 center = new Vector3();
     float radius = 5f;
     Node3 spin;
+    boolean girl;
     /** Точка съёмки: зданиям нужно чистое место в стороне от подиума меню. */
     float ox, oz;
 
@@ -36,6 +37,7 @@ public final class Studio {
         for (String[] k : tg) all.add(new Item("target", k[0], k[1]));
         String[][] ob = {{"truck", "Грузовик колонны"}, {"truck", "Грузовик колонны"}, {"truck", "Грузовик колонны"}, {"sub", "Подстанция"}, {"dam", "Плотина"}};
         for (String[] k : ob) all.add(new Item("obj", k[0], k[1]));
+        for (String gid : Girl3D.IDS) all.add(new Item("girl", gid, gid));
         for (Item it : all) {
             if (only == null) { items.add(it); continue; }
             for (String o : only.split(",")) if (o.trim().equals(it.id)) items.add(it);
@@ -67,6 +69,13 @@ public final class Studio {
             case "drone": g = SModels.drone(it.id).g; lift = -1; break;
             case "target": g = SModels.target(it.id, world.themeName).g; break;
             case "obj": g = Objs.make(it.id).g; break;
+            case "girl": {
+                int of = System.getenv("SN_OUTFIT") != null ? 1 : 0;
+                Girl3D.Model gm = Girl3D.build(it.id, of);
+                if (System.getenv("SN_EMO") != null) gm.emotion(System.getenv("SN_EMO"));
+                g = gm.root;
+                break;
+            }
             default:
                 if (it.id.equals("missile")) {
                     g = new Node3(Models.missileMesh(), Models.MAT_MISSILE);
@@ -76,6 +85,7 @@ public final class Studio {
                 break;
         }
         root.add(g);
+        girl = it.group.equals("girl");
         boolean big = it.group.equals("target") || it.group.equals("obj");
         ox = big ? 0 : 0; oz = big ? -70 : 0;
         String sp = System.getenv("SN_SPOT");
@@ -112,8 +122,10 @@ public final class Studio {
     /** Ракурс: 0 — спереди-слева, 1 — сзади-справа, 2 — сбоку крупно. */
     public void aim(PerspectiveCamera cam, int view) {
         float yaw = view == 0 ? -0.75f : (view == 1 ? MathUtils.PI - 0.75f : -MathUtils.PI / 2);
+        if (girl) yaw = view == 0 ? -0.45f : (view == 1 ? MathUtils.PI - 0.6f : 0f);
         float d = radius / MathUtils.sin(cam.fieldOfView * MathUtils.degreesToRadians * 0.5f) * (view == 2 ? 0.5f : 0.62f);
         float el = view == 2 ? 0.1f : 0.32f;
+        if (girl) { el = 0.12f; d *= view == 2 ? 1.25f : 1f; }
         // вперёд у моделей — это -Z
         cam.position.set(center.x + MathUtils.sin(yaw) * MathUtils.cos(el) * d, center.y + MathUtils.sin(el) * d, center.z - MathUtils.cos(yaw) * MathUtils.cos(el) * d);
         cam.direction.set(center).sub(cam.position).nor();
