@@ -293,8 +293,8 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         dyns.add(game.tracers); dyns.add(game.beamDyn); dyns.add(strike.tracers); dyns.add(strike.beamDyn); dyns.add(FX.dAdd); dyns.add(FX.dRing); dyns.add(world.boltDyn); dyns.add(world.rainDyn);
         if (strike.active) rend.shadowFocus.set(cam.position.x, 0, cam.position.z);
         BlackBox.mark("рендер кадра");
+        if (studio == null) ui.op.world3D();
         rend.render(roots, dyns);
-        if (studio == null) ui.op.overlay3D(rend);
         if (strike.active && ui.panel.isEmpty()) fpv.draw(strike.noise(), strike.T, strike.hitT, strike.camMode == 0 && strike.st.equals("fly") ? 1 : 0);
         BlackBox.mark("отрисовка интерфейса");
         if (studio == null) ui.render();

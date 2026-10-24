@@ -72,7 +72,7 @@ public class OpUI {
     float partAcc;
 
     public void reset() {
-        emo = "norm"; emoT = 0; jumpT = 0; panicT = 0; bubT = 0; bubCd = 0; abilT = 0; lost = false; parts.clear(); sayCd = 0;
+        emo = "norm"; emoT = 0; jumpT = 0; panicT = 0; bubT = 0; bubCd = 0; abilT = 0; lost = false; parts.clear(); sayCd = 0; followYaw = 9;
     }
 
     void bubble(String s, Ops.Op o) {
@@ -138,8 +138,8 @@ public class OpUI {
         float T = u.T;
         emoT -= dt; jumpT = Math.max(0, jumpT - dt); panicT = Math.max(0, panicT - dt); bubT -= dt; bubCd -= dt; abilT -= dt;
         blinkT -= dt;
-        float gh = Math.min(H * 0.44f, 300), k = gh / IH;
-        float cxm = W * 0.6f;
+        float gh = scrOk ? scrH : Math.min(H * 0.44f, 300), k = gh / IH;
+        float cxm = scrOk ? scrX : W * 0.6f;
         float lift = 0;
         if (jumpT > 0) {
             float p = 1 - jumpT / jumpDur;
@@ -149,7 +149,8 @@ public class OpUI {
         float shx = panicT > 0 ? MathUtils.sin(T * 60) * 3 * (panicT / 0.6f) : 0;
         float breath = 1 + 0.012f * MathUtils.sin(T * 2.2f);
         float sway = 1.2f * MathUtils.sin(T * 1.1f);
-        float x0 = cxm - IW * k / 2 + shx, y0 = H - 6 - IH * k * breath - lift;
+        float x0 = cxm - IW * k / 2 + shx, y0 = (scrOk ? scrFeet : H - 6) - IH * k * breath - lift * gh / 300f;
+
         gx = x0; gy = y0; gk = k;
         // эмоция — для 3D-модели (рисуется раньше интерфейса, в overlay3D)
         String e;
@@ -158,9 +159,9 @@ public class OpUI {
         else if (g.hp < g.st("maxHp") * 0.3f && g.hp > 0) e = "worry";
         else e = "norm";
         if (blinkT < 0) { if (blinkT < -0.12f) blinkT = 2.5f + MathUtils.random(2.5f); else if (e.equals("norm") || e.equals("worry")) e = "blink"; }
-        curEmo = e; curLift = lift / gh; curShake = shx / gh;
+        curEmo = e; curLift = lift / 300f; curShake = shx / 300f;
         // частицы
-        if (o.rar >= 2) {
+        if (o.rar >= 2 && !scrOk) {
             partAcc += dt * (o.rar >= 3 ? 7 : 4);
             while (partAcc > 1) { // вокруг неё, а не по лицу
                 partAcc -= 1;
@@ -203,63 +204,75 @@ public class OpUI {
     /** Куда смотрит вытянутая рука в покое (плечо → кончик пальца), оси игры. */
     static final com.badlogic.gdx.math.Vector3 ARM_REST = new com.badlogic.gdx.math.Vector3(0.25f, 0.105f, -0.305f).nor();
 
-    /** Вызывается после рендера сцены, до интерфейса. */
-    public void overlay3D(ru.shitneba.gfx.Renderer r) {
+    /** Масштаб девчонки в мире (рост ~1.27 м × GS). */
+    static final float GS = 1.3f;
+    float followYaw = 9, gx3, gz3;
+    boolean scrOk; float scrX, scrFeet, scrH;
+
+    /** Маленькая девчонка стоит на платформе рядом с комплексом. Вызывается перед рендером сцены. */
+    public void world3D() {
         Game g = u.g;
         Ops.Op o = g.op;
-        if (o == null || !u.girlVisible()) return;
+        boolean vis = o != null && u.girlVisible();
+        if (!vis) {
+            if (gm != null && gm.root.parent != null) gm.root.remove();
+            scrOk = false;
+            return;
+        }
         String key = outfit(o);
         if (gm == null || !key.equals(gmKey)) {
+            if (gm != null) gm.root.remove();
             gm = ru.shitneba.Girl3D.build(o.id, Ops.alt(o.id) ? 1 : 0);
+            gm.shadow.visible = false; // в мире тень настоящая
             gmKey = key;
         }
+        if (gm.root.parent != g.root) g.root.add(gm.root);
         gm.emotion(curEmo);
-        float T = u.T;
-        int bw = Gdx.graphics.getBackBufferWidth(), bh = Gdx.graphics.getBackBufferHeight();
-        float H = d.h, gh = Math.min(H * 0.44f, 300);
-        // камера: ноги у низа экрана, рост gh, центр по x на 0.6 ширины
-        float t = (float) Math.tan(Math.toRadians(15));
-        float nf = 1 - 2 * (H - 6) / H, nh = 1 - 2 * (H - 6 - gh) / H;
-        float D = ru.shitneba.Girl3D.TOP / ((nh - nf) * t);
-        float ch = -nf * D * t, aspect = bw / (float) bh;
-        float cx = 0.2f * D * t * aspect;
-        ocam.fieldOfView = 30; ocam.viewportWidth = bw; ocam.viewportHeight = bh;
-        ocam.near = 0.1f; ocam.far = 60;
-        ocam.position.set(cx, ch, -D);
-        ocam.direction.set(0, 0, 1); ocam.up.set(0, 1, 0);
-        ocam.update();
-        // поза
-        float H3 = ru.shitneba.Girl3D.TOP;
-        gm.root.pos.set(curShake * H3 * 1.3f, curLift * H3 * 1.3f, 0);
-        gm.root.setEuler(0, -0.42f, 0.03f * MathUtils.sin(T * 1.1f));
-        gm.shadow.pos.y = 0.005f - gm.root.pos.y;
-        float sc = 1 - Math.min(0.5f, gm.root.pos.y * 1.5f);
-        gm.shadow.scl.set(sc, 1, sc);
+        float T = u.T, dt = Math.min(0.05f, Gdx.graphics.getDeltaTime());
+        // встаёт на землю в точке, которую видно справа внизу экрана (рядом с машиной), и плавно туда перебегает
+        com.badlogic.gdx.math.collision.Ray ray = g.cam.getPickRay(Gdx.graphics.getWidth() * 0.63f, Gdx.graphics.getHeight() * 0.9f);
+        float tx, tz;
+        if (ray.direction.y < -0.02f) {
+            float k = (0.1f - ray.origin.y) / ray.direction.y;
+            tx = ray.origin.x + ray.direction.x * k; tz = ray.origin.z + ray.direction.z * k;
+        } else { tx = ray.origin.x + ray.direction.x * 9; tz = ray.origin.z + ray.direction.z * 9; }
+        float dist = (float) Math.sqrt(tx * tx + tz * tz);
+        float dc = MathUtils.clamp(dist, 3.6f, 8.5f);
+        if (dist > 0.01f) { tx = tx / dist * dc; tz = tz / dist * dc; }
+        if (followYaw > 8) { gx3 = tx; gz3 = tz; followYaw = 0; }
+        gx3 += (tx - gx3) * Math.min(1, dt * 2.5f); gz3 += (tz - gz3) * Math.min(1, dt * 2.5f);
+        float px = gx3, pz = gz3;
+        float ground = Math.max(g.height(px, pz), 0.02f);
+        float H3 = ru.shitneba.Girl3D.TOP * GS;
+        gm.root.pos.set(px + curShake * H3 * 1.3f, ground + curLift * H3 * 1.3f, pz);
+        gm.root.scl.set(GS, GS, GS);
+        // лицом к камере вполоборота, чтобы было видно и лицо, и куда она показывает
+        float fx = g.camPos.x - px, fz = g.camPos.z - pz;
+        float face = MathUtils.atan2(-fx, -fz) - 0.55f;
+        gm.root.setEuler(0, face, 0.03f * MathUtils.sin(T * 1.1f));
         gm.spine.scl.set(1, 1 + 0.015f * MathUtils.sin(T * 2.2f), 1);
         if (lost) gm.head.setEuler(-0.35f, 0, 0.1f);
         else gm.head.setEuler(0.04f * MathUtils.sin(T * 0.9f), 0.12f * MathUtils.sin(T * 0.7f), 0.06f * MathUtils.sin(T * 1.3f));
-        // левая рука: радуется — машет, иначе у груди
         if (curEmo.equals("joy") || curEmo.equals("shout")) gm.armL.setEuler(0, 0, -1.9f + 0.35f * MathUtils.sin(T * 16));
         else if (lost) gm.armL.setEuler(0.4f, 0, 0);
         else gm.armL.setEuler(0, 0, 0);
-        // правая рука — на прицел
-        gm.root.updateGlobal(null);
-        boolean aimOk = !lost && g.state.equals("run") && u.proj(g.aimPoint, u.sp2);
-        if (aimOk) {
-            com.badlogic.gdx.math.collision.Ray ray = ocam.getPickRay(u.sp2.x * d.s, u.sp2.y * d.s, 0, 0, bw, bh);
-            gm.armR.parent.global.getTranslation(v1);
-            v2.set(gm.armR.pos).mul(gm.armR.parent.global); // плечо в мире
-            // точка на плоскости девчонки, куда указывает прицел, плюс немного вглубь — рука тянется вперёд
-            float k = (v2.z + 8f - ray.origin.z) / ray.direction.z; // цель — в глубине сцены, за девчонкой
-            v1.set(ray.direction).scl(k).add(ray.origin).sub(v2).nor();
+        // правая рука — на цель (точка прицела далеко в сцене)
+        gm.root.updateGlobal(g.root.global);
+        if (!lost && g.state.equals("run")) {
+            v2.set(gm.armR.pos).mul(gm.armR.parent.global);
+            v1.set(g.aimPoint).sub(v2).nor();
             m4.set(gm.armR.parent.global).inv();
             v1.rot(m4).nor();
             tq.setFromCross(ARM_REST, v1);
         } else if (lost) tq.setEulerAngles(0, 70, 0);
         else tq.idt();
-        armQ.slerp(tq, Math.min(1, Gdx.graphics.getDeltaTime() * 8));
+        armQ.slerp(tq, Math.min(1, dt * 8));
         gm.armR.rot.set(armQ);
-        r.renderOverlay(gm.root, ocam);
+        // где она на экране — для пузыря с репликой и искр
+        v1.set(gm.root.pos.x, ground, gm.root.pos.z);
+        v2.set(gm.root.pos.x, ground + H3 * 1.05f, gm.root.pos.z);
+        scrOk = u.proj(v1, u.sp) && u.proj(v2, u.sp2);
+        if (scrOk) { scrX = u.sp.x; scrFeet = u.sp.y; scrH = Math.max(8, u.sp.y - u.sp2.y); }
     }
 
     void spawn(float x, float y, boolean burst) {
@@ -273,6 +286,7 @@ public class OpUI {
     void burst(int n) {
         Ops.Op o = u.g.op;
         if (o == null || o.rar < 2 || gk == 0) return;
+        if (scrOk) n = Math.max(3, n / 4);
         for (int i = 0; i < n; i++) spawn(gx + (128 + MathUtils.random(-60, 60)) * gk, gy + MathUtils.random(60, 300) * gk, true);
     }
 
