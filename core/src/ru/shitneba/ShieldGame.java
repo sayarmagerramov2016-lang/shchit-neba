@@ -510,6 +510,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         BlackBox.log("выход");
         BlackBox.stop();
         G.save();
+        ui.kit.dispose();
         draw.dispose();
         duel.stop();
         fpv.dispose();

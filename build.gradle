@@ -1,5 +1,5 @@
 buildscript {
-    repositories { google(); mavenCentral() }
+    repositories { google(); maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }; mavenCentral() }
     dependencies { classpath 'com.android.tools.build:gradle:8.5.2' }
 }
 allprojects {

@@ -28,6 +28,8 @@ public class Game {
     public PerspectiveCamera cam;
     public GameUI ui;
     public String state = "menu";
+    /** Поворот камеры меню: + машина справа (панели слева), − машина левее (главное меню, кнопки справа). */
+    public float menuShift = 0.42f, menuShiftCur = -0.32f;
     public String mode = "endless";
     public String VEH = "pantsir";
     public Models.Vehicle vm;
@@ -2070,7 +2072,8 @@ public class Game {
             cam.position.set(MathUtils.sin(a2) * 21, 6.8f + MathUtils.sin(T * 0.3f) * 0.6f, MathUtils.cos(a2) * 21 - 2);
             cam.direction.set(0, 4, 0).sub(cam.position).nor();
             cam.up.set(Vector3.Y);
-            cam.direction.rotateRad(Vector3.Y, 0.42f);
+            menuShiftCur += (menuShift - menuShiftCur) * Math.min(1, dt * 4);
+            cam.direction.rotateRad(Vector3.Y, menuShiftCur);
             cam.update();
             return;
         }

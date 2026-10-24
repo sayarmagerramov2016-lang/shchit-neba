@@ -86,6 +86,7 @@ public class UI implements GameUI, InputProcessor {
 
     public UI(Game g, Draw d, Host host) {
         this.g = g; this.d = d; this.host = host;
+        kit = new Kit(d);
         DESK = !G.isMobile() && System.getenv("SN_PHONE") == null; // SN_PHONE=1 — интерфейс как на телефоне (для скриншотов магазина)
         String[][] bt = {{"endless", "menu"}, {"garage", "menu"}, {"shop", "menu"}, {"settings", "menu"}, {"about", "menu"},
                 {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}};
@@ -234,6 +235,7 @@ public class UI implements GameUI, InputProcessor {
             }
             return;
         }
+        g.menuShift = panel.equals("menu") || panel.equals("daily") ? -0.32f : 0.42f;
         boolean hud = panel.isEmpty() && (g.state.equals("run") || g.state.equals("dying") || g.state.equals("over") || g.state.equals("result"));
         if (strike != null && strike.active) { if (panel.isEmpty()) drawStrikeHud(); }
         else if (hud && bossRole()) drawBossHud();
@@ -579,69 +581,175 @@ public class UI implements GameUI, InputProcessor {
         return n;
     }
 
+    // ---------- главное меню на UI-ките ----------
+    public final Kit kit;
+    static final Color C_BRASS = C("c9a85a"), C_STEEL = C("b9c3cc");
+
+    /** Кнопка-плашка меню: иконка слева, название и подпись. */
+    boolean menuPlate(float x, float y, float w, float h, boolean gold, String icon, String name, String sub) {
+        boolean pr = pressing(x, y, w, h), hv = hover(x, y, w, h);
+        if (!d.off) {
+            float sh = pr ? 1.5f : 0;
+            Color tint = pr ? C("b8b8b8") : (hv ? C("ffffff") : C("e6e6e6"));
+            kit.nine(gold || hv ? "menu_button_gold" : "menu_button_blue", x, y + sh, w, h, tint, 1);
+            float ic = h * 0.62f;
+            kit.fit(icon, x + h * 0.32f, y + (h - ic) / 2 + sh, ic, ic, 1);
+            float tx = x + h * 0.32f + ic + 12;
+            float ts = Math.min(19, h * 0.3f);
+            float tw = d.textW(name, ts, Draw.TITLE), room = x + w - h * 0.75f - tx;
+            if (tw > room) ts *= room / tw;
+            d.text(name.toUpperCase(), tx, y + h * 0.5f + (sub == null ? ts * 0.36f : -1) + sh, ts, gold ? C("f2e3b8") : C_TXT, Draw.TITLE, -1);
+            if (sub != null) d.text(sub, tx, y + h * 0.5f + 15 + sh, 11, C_MUT, Draw.MAIN, -1);
+        }
+        boolean c = tap(x, y, w, h);
+        if (c) G.sfx("click");
+        return c;
+    }
+
+    /** Маленькая плашка снизу: иконка + подпись. */
+    boolean smallPlate(float x, float y, float w, float h, String icon, String name) {
+        boolean pr = pressing(x, y, w, h), hv = hover(x, y, w, h);
+        if (!d.off) {
+            float sh = pr ? 1.5f : 0;
+            kit.nine("small_button_plate", x, y + sh, w, h, pr ? C("b0b0b0") : (hv ? WHITE : C("dedede")), 1);
+            float ts = 13;
+            float tw = d.textW(name, ts, Draw.BOLD);
+            float ic = icon == null ? 0 : h * 0.46f;
+            float gap = icon == null ? 0 : 7;
+            float tot = ic + gap + tw;
+            if (tot > w - 16) { ts *= (w - 16 - ic - gap) / tw; tw = d.textW(name, ts, Draw.BOLD); tot = ic + gap + tw; }
+            float sx = x + (w - tot) / 2;
+            if (icon != null) kit.fit(icon, sx, y + (h - ic) / 2 - 2 + sh, ic, ic, 1);
+            d.text(name, sx + ic + gap, y + h / 2 + ts * 0.36f - 2 + sh, ts, hv ? WHITE : C_TXT, Draw.BOLD, -1);
+        }
+        boolean c = tap(x, y, w, h);
+        if (c) G.sfx("click");
+        return c;
+    }
+
+    /** Квадратная кнопка с картинкой целиком (подарок, настройки). */
+    boolean imgButton(float x, float y, float s, String img) {
+        boolean pr = pressing(x, y, s, s), hv = hover(x, y, s, s);
+        if (!d.off) kit.img(img, x, y + (pr ? 1.5f : 0), s, s, pr ? C("b0b0b0") : (hv ? WHITE : C("e6e6e6")), 1);
+        boolean c = tap(x, y, s, s);
+        if (c) G.sfx("click");
+        return c;
+    }
+
     void pMenu() {
-        frame("menu", 440, true, false, () -> {
-            d.text("ОТРЯД «ЩИТ» · ТАКТИЧЕСКИЙ ТЕРМИНАЛ", cx, cy + 11, 11, C_TEAL, Draw.WIDE, -1);
-            cy += 20;
-            d.text("ЩИТ НЕБА 3D", cx, cy + 38, 40, C_TXT, Draw.WIDE, -1);
-            cy += 50;
-            d.text("Оборона долины Ясная · 6+", cx, cy + 13, 13, C_MUT);
-            cy += 22;
-            d.text("Рекорд  " + G.SV.best, cx, cy + 14, 14, C_TXT);
-            d.text("Монеты  " + G.SV.c, cx + cw, cy + 14, 14, C_ACC, Draw.BOLD, 1);
-            cy += 22;
-            d.text(rankText(), cx, cy + 13, 13, C_RANK, Draw.BOLD, -1);
-            cy += 20;
-            bar(cx, cy, cw, 6, rankK(), C_RANK);
-            cy += 14;
-            if (btn("Бесконечный бой", 52, BIG, true)) show("endless");
-            if (btn(String.format("Кампания · глава %d   %d/%d", curChapter() + 1, allStars(), allMissions() * 3), 44, NORMAL, true)) openCampaign();
-            if (!d.off) d.star(cx + cw - 22, cy - 8 - 22, 7, C_ACC, 1);
-            int r2 = btnRow(new String[]{"", ""}, new int[]{NORMAL, NORMAL}, null, 44);
-            if (!d.off) {
-                float w2 = (cw - 6) / 2;
-                d.text("НОВОЕ", cx + 22, cy - 8 - 44 + 17, 10, C_ACC, Draw.WIDE, -1);
-                d.text("Рой: дрон-камикадзе", cx + 22, cy - 8 - 44 + 34, 14, C_TXT, Draw.BOLD, -1);
-                d.text("ПО WI‑FI", cx + w2 + 6 + 22, cy - 8 - 44 + 17, 10, C_TEAL, Draw.WIDE, -1);
-                d.text("Дуэль: ПВО — босс", cx + w2 + 6 + 22, cy - 8 - 44 + 34, 14, C_TXT, Draw.BOLD, -1);
-            }
-            if (r2 == 0) show("swarm");
-            else if (r2 == 1) openDuel();
-            int qn = questsReady();
-            String[] names = {"Гараж", "Улучшения", qn > 0 ? "Задания (" + qn + ")" : "Задания", "Испытания", "Достижения", "Рекорды", "Настройки", "Об игре"};
-            float gp = 6, w = (cw - gp * 3) / 4;
-            for (int i = 0; i < names.length; i++) {
-                float x = cx + (i % 4) * (w + gp), y = cy + (i / 4) * (38 + gp);
-                if (button(x, y, w, 38, names[i], NORMAL, true, 14)) {
-                    switch (i) {
-                        case 0: garageTab = 0; show("garage"); break;
-                        case 1: shopVeh = -1; backTo.put("shop", "menu"); show("shop"); break;
-                        case 2: show("quests"); break;
-                        case 3: show("chal"); break;
-                        case 4: show("ach"); break;
-                        case 5: show("records"); break;
-                        case 6: show("settings"); break;
-                        default: show("about"); break;
-                    }
+        float m = 14;
+        boolean dailyReady = !G.SV.dailyLast.equals(G.today());
+        if (!d.off) {
+            d.gradH(0, 0, d.w * 0.42f, d.h, BLACK, 0.5f, BLACK, 0);
+            d.grad(0, d.h * 0.62f, d.w, d.h * 0.38f, BLACK, 0, BLACK, 0.55f);
+            d.gradH(d.w * 0.58f, 0, d.w * 0.42f, d.h, BLACK, 0, BLACK, 0.3f);
+        }
+
+        // --- титул слева сверху ---
+        float th = Math.min(118, d.h * 0.22f), tw = kit.wAt("title_panel_with_emblem", th);
+        kit.img("title_panel_with_emblem", m, m, tw, th);
+        if (!d.off) {
+            float tx = m + tw * 0.40f, room = tw * 0.55f;
+            float ts = 30, w1 = d.textW("ЩИТ НЕБА", ts, Draw.WIDE);
+            if (w1 > room) ts *= room / w1;
+            float ss = 8.5f, sw0 = d.textW("ОТРЯД «ЩИТ» · ТЕРМИНАЛ ПВО", ss, Draw.WIDE);
+            if (sw0 > room) ss *= room / sw0;
+            d.text("ОТРЯД «ЩИТ» · ТЕРМИНАЛ ПВО", tx, m + th * 0.27f, ss, C_MUT, Draw.WIDE, -1);
+            d.text("ЩИТ НЕБА", tx + 1.5f, m + th * 0.56f + 1.5f, ts, BLACK, Draw.WIDE, -1);
+            d.text("ЩИТ НЕБА", tx, m + th * 0.56f, ts, C_BRASS, Draw.WIDE, -1);
+            d.text("3D", tx, m + th * 0.8f, ts * 0.62f, C_STEEL, Draw.WIDE, -1);
+            float lx = tx + d.textW("3D", ts * 0.62f, Draw.WIDE) + 8;
+            d.rect(lx, m + th * 0.8f - ts * 0.24f, Math.max(10, tx + room - lx), 1.5f, C_STEEL, 0.35f);
+        }
+        // звание и рекорд под титулом
+        float ry = m + th + 10;
+        if (!d.off) {
+            d.text(rankText(), m + 6, ry + 12, 12, C_RANK, Draw.BOLD, -1);
+            bar(m + 6, ry + 18, tw - 12, 5, rankK(), C_RANK);
+            d.text("Рекорд бесконечного боя: " + G.SV.best, m + 6, ry + 40, 12, C_MUT, Draw.MAIN, -1);
+        }
+
+        // --- верхняя полоса: монеты, звёзды, подарок, настройки ---
+        float bs = 46, bh = 42, bw = kit.wAt("resource_bar", bh);
+        float sx = d.w - m - bs;
+        if (imgButton(sx, m, bs, "settings_button")) show("settings");
+        sx -= bs + 6;
+        if (imgButton(sx, m, bs, dailyReady ? "gift_button" : "icon_button_plate")) {
+            if (dailyReady) show("daily"); else toast("Награда за сегодня уже получена — заходи завтра");
+        }
+        if (!dailyReady && !d.off) kit.fit("gift_icon", sx + bs * 0.24f, m + bs * 0.22f, bs * 0.52f, bs * 0.52f, 0.55f);
+        if (dailyReady && !d.off) {
+            float p = 0.5f + 0.5f * MathUtils.sin(T * 5);
+            d.circle(sx + bs * 0.86f, m + bs * 0.16f, 6 + p * 2, C_RED, 0.25f * p);
+        }
+        sx -= bw + 8;
+        kit.img("resource_bar", sx, m + (bs - bh) / 2, bw, bh);
+        if (!d.off) {
+            float by = m + bs / 2 + 5;
+            d.text(String.valueOf(G.SV.c), sx + bw * 0.24f, by, 15, C_TXT, Draw.BOLD, -1);
+            d.text(allStars() + "/" + allMissions() * 3, sx + bw * 0.74f, by, 15, C_TXT, Draw.BOLD, -1);
+        }
+
+        // --- столбец режимов справа ---
+        float RW = Math.min(340, d.w * 0.36f);
+        float top = m + bs + 12, bot = d.h - m;
+        int n = 6; float gp = 7;
+        float ph = Math.min(64, (bot - top - gp * (n - 1)) / n);
+        float px = d.w - m - RW, py = top + (bot - top - (ph * n + gp * (n - 1))) / 2;
+        if (menuPlate(px, py, RW, ph, true, "campaign_crosshair_icon", "Кампания",
+                String.format("Глава %d · звёзды %d/%d", curChapter() + 1, allStars(), allMissions() * 3))) openCampaign();
+        py += ph + gp;
+        if (menuPlate(px, py, RW, ph, false, "endless_infinity_icon", "Бесконечный бой", "Волны без конца · рекорд " + G.SV.best)) show("endless");
+        py += ph + gp;
+        if (menuPlate(px, py, RW, ph, false, "challenges_star_badge_icon", "Испытания", "Особые задачи на время")) show("chal");
+        py += ph + gp;
+        if (menuPlate(px, py, RW, ph, false, "swarm_drones_icon", "Рой", "Новое · дрон-камикадзе")) show("swarm");
+        py += ph + gp;
+        if (menuPlate(px, py, RW, ph, false, "duel_swords_icon", "Дуэль", "По Wi-Fi · ПВО против босса")) openDuel();
+        py += ph + gp;
+        if (menuPlate(px, py, RW, ph, false, "garage_aa_vehicle_icon", "Гараж", G.vehName(G.SV.veh))) { garageTab = 0; show("garage"); }
+
+        // --- нижний ряд слева ---
+        float lw = px - m - 16, sh = 46;
+        int qn = questsReady();
+        String[] nm = {"Задания", "Достижения", "Рекорды", "Улучшения"};
+        String[] ic = {"missions_clipboard_icon", "achievements_trophy_icon", "records_chart_icon", "coin_icon"};
+        float sgp = 7, sw = (lw - sgp * 3) / 4, sy = d.h - m - sh;
+        for (int i = 0; i < 4; i++) {
+            float x = m + i * (sw + sgp);
+            if (smallPlate(x, sy, sw, sh, ic[i], nm[i])) {
+                switch (i) {
+                    case 0: show("quests"); break;
+                    case 1: show("ach"); break;
+                    case 2: show("records"); break;
+                    default: shopVeh = -1; backTo.put("shop", "menu"); show("shop"); break;
                 }
-                if (i == 2 && qn > 0 && !d.off) d.circle(x + w - 10, y + 9, 4, C_ACC, 0.6f + 0.4f * MathUtils.sin(T * 5));
             }
-            cy += 2 * (38 + gp) + 4;
-            d.text("v" + G.VER, cx + cw, cy + 4, 11, C_MUT, Draw.MAIN, 1);
-            cy += 10;
-        });
-        // табличка машины справа
+            if (i == 0 && qn > 0 && !d.off) {
+                float bsz = 20 + 2 * MathUtils.sin(T * 5);
+                kit.img("notification_badge", x + sw - bsz * 0.75f, sy - bsz * 0.3f, bsz, bsz);
+                d.text(String.valueOf(qn), x + sw - bsz * 0.25f, sy + bsz * 0.2f + 4, 11, WHITE, Draw.BOLD, 0);
+            }
+        }
+
+        // --- выбранный комплекс над нижним рядом ---
         if (!d.off) {
             String vn = G.vehName(G.SV.veh);
-            float x = d.w - 24, y = d.h - 30;
             JsonValue V = G.D.get("VEHICLES").get(G.SV.veh);
-            d.text("ВЫБРАННЫЙ КОМПЛЕКС", x, y - 46, 11, C_TEAL, Draw.WIDE, 1);
-            d.text(vn.toUpperCase(), x + 1.5f, y - 18 + 1.5f, 26, BLACK, Draw.WIDE, 1);
-            d.text(vn.toUpperCase(), x, y - 18, 26, C_TXT, Draw.WIDE, 1);
-            float tw = Math.min(360, d.textW(V.getString("desc"), 13, Draw.MAIN));
-            d.rect(x - tw, y - 13, tw, 1, C_TEAL, 0.4f);
-            d.text(V.getString("desc"), x, y + 6, 13, C_MUT, Draw.MAIN, 1);
+            float x = m + 6, y = sy - 30;
+            d.text("ВЫБРАННЫЙ КОМПЛЕКС", x, y - 40, 10, C_BRASS, Draw.WIDE, -1);
+            d.text(vn.toUpperCase(), x + 1.5f, y - 16 + 1.5f, 24, BLACK, Draw.WIDE, -1);
+            d.text(vn.toUpperCase(), x, y - 16, 24, C_TXT, Draw.WIDE, -1);
+            d.wrap(V.getString("desc"), x, y - 6, Math.min(lw - 12, 380), 12, C_MUT, Draw.MAIN, -1);
         }
+        // версия и «Об игре» мелко в углу над рядом
+        float ax = m + lw - 70, ay = sy - 20;
+        if (!d.off) {
+            boolean hv = hover(ax, ay - 4, 70, 18);
+            d.text("Об игре", ax + 70, ay + 9, 12, hv ? WHITE : C_MUT, Draw.MAIN, 1);
+            d.text("v" + G.VER, ax + 70, ay - 6, 10, C_MUT, Draw.MAIN, 1);
+        }
+        if (tap(ax, ay - 4, 70, 18)) { G.sfx("click"); show("about"); }
     }
 
     void pEndless() {
