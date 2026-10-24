@@ -1,0 +1,227 @@
+{
+ "source": "SpriteCook UI kit 733e0ed6-fcbb-405f-b634-ac7fd963afa4, приглушено store/tools/tone_ui.py",
+ "components": [
+  {
+   "name": "title_panel_with_emblem",
+   "file": "ui/menu/title_panel_with_emblem.png",
+   "width": 538,
+   "height": 224,
+   "scalable": false,
+   "spritecook_asset_id": "e33e2561-398d-4f41-808c-c1b88d154d82"
+  },
+  {
+   "name": "resource_bar",
+   "file": "ui/menu/resource_bar.png",
+   "width": 410,
+   "height": 92,
+   "scalable": false,
+   "spritecook_asset_id": "30e334e8-60c7-4f73-8ee8-ae8987fb684a"
+  },
+  {
+   "name": "gift_button",
+   "file": "ui/menu/gift_button.png",
+   "width": 127,
+   "height": 127,
+   "scalable": false,
+   "spritecook_asset_id": "98df8358-bc39-49a4-adb5-5363a51959e2"
+  },
+  {
+   "name": "settings_button",
+   "file": "ui/menu/settings_button.png",
+   "width": 113,
+   "height": 119,
+   "scalable": false,
+   "spritecook_asset_id": "4fcf6a32-3634-4b9c-9fbb-56fbd47856b9"
+  },
+  {
+   "name": "menu_button_blue",
+   "file": "ui/menu/menu_button_blue.png",
+   "width": 596,
+   "height": 130,
+   "scalable": true,
+   "spritecook_asset_id": "1a3b6b78-28ec-4958-aab3-275e7330cad7",
+   "nine_slice": {
+    "left": 30,
+    "top": 25,
+    "right": 65,
+    "bottom": 25
+   }
+  },
+  {
+   "name": "menu_button_gold",
+   "file": "ui/menu/menu_button_gold.png",
+   "width": 593,
+   "height": 126,
+   "scalable": true,
+   "spritecook_asset_id": "06deea16-9b0b-4cb8-884e-02d005bd6cbc",
+   "nine_slice": {
+    "left": 30,
+    "top": 25,
+    "right": 65,
+    "bottom": 25
+   }
+  },
+  {
+   "name": "radar_panel",
+   "file": "ui/menu/radar_panel.png",
+   "width": 336,
+   "height": 314,
+   "scalable": true,
+   "spritecook_asset_id": "346f7e71-3ee3-4590-9ee7-dca8c1452151",
+   "nine_slice": {
+    "left": 40,
+    "top": 40,
+    "right": 40,
+    "bottom": 40
+   }
+  },
+  {
+   "name": "small_button_plate",
+   "file": "ui/menu/small_button_plate.png",
+   "width": 292,
+   "height": 122,
+   "scalable": true,
+   "spritecook_asset_id": "11f3e62b-944f-4710-88f1-93e06e4254b9",
+   "nine_slice": {
+    "left": 27,
+    "top": 25,
+    "right": 27,
+    "bottom": 30
+   }
+  },
+  {
+   "name": "icon_button_plate",
+   "file": "ui/menu/icon_button_plate.png",
+   "width": 140,
+   "height": 129,
+   "scalable": true,
+   "spritecook_asset_id": "15c4d095-3582-4c0e-8ef3-0ff1659a5e8a",
+   "nine_slice": {
+    "left": 30,
+    "top": 30,
+    "right": 30,
+    "bottom": 30
+   }
+  },
+  {
+   "name": "notification_badge",
+   "file": "ui/menu/notification_badge.png",
+   "width": 62,
+   "height": 64,
+   "scalable": false,
+   "spritecook_asset_id": "7fd35c94-faf6-4453-aa2b-f12a677e66e1"
+  },
+  {
+   "name": "shield_emblem_icon",
+   "file": "ui/menu/shield_emblem_icon.png",
+   "width": 139,
+   "height": 161,
+   "scalable": false,
+   "spritecook_asset_id": "fa21eb9b-c8dc-421f-92b7-1e81ef1e9fb6"
+  },
+  {
+   "name": "coin_icon",
+   "file": "ui/menu/coin_icon.png",
+   "width": 112,
+   "height": 119,
+   "scalable": false,
+   "spritecook_asset_id": "59092969-8d34-4c27-a3a5-eb97fe922a85"
+  },
+  {
+   "name": "star_icon",
+   "file": "ui/menu/star_icon.png",
+   "width": 120,
+   "height": 119,
+   "scalable": false,
+   "spritecook_asset_id": "0a95ad08-ab6a-4f3c-a3bb-78674f83ba9c"
+  },
+  {
+   "name": "gift_icon",
+   "file": "ui/menu/gift_icon.png",
+   "width": 106,
+   "height": 113,
+   "scalable": false,
+   "spritecook_asset_id": "84476875-890c-4812-a6cb-bdc6cd73ac8f"
+  },
+  {
+   "name": "gear_icon",
+   "file": "ui/menu/gear_icon.png",
+   "width": 122,
+   "height": 125,
+   "scalable": false,
+   "spritecook_asset_id": "0f75ac4e-9f5f-43f3-8db0-2a6f395e34d5"
+  },
+  {
+   "name": "campaign_crosshair_icon",
+   "file": "ui/menu/campaign_crosshair_icon.png",
+   "width": 156,
+   "height": 159,
+   "scalable": false,
+   "spritecook_asset_id": "a935a261-4220-4568-93b5-01513a37ffc0"
+  },
+  {
+   "name": "endless_infinity_icon",
+   "file": "ui/menu/endless_infinity_icon.png",
+   "width": 130,
+   "height": 85,
+   "scalable": false,
+   "spritecook_asset_id": "2cdb18cf-ad03-49e8-9fd4-c5446d99b8d5"
+  },
+  {
+   "name": "challenges_star_badge_icon",
+   "file": "ui/menu/challenges_star_badge_icon.png",
+   "width": 99,
+   "height": 114,
+   "scalable": false,
+   "spritecook_asset_id": "6ce98e73-472e-4fc5-9e30-06dfd58ffd8b"
+  },
+  {
+   "name": "swarm_drones_icon",
+   "file": "ui/menu/swarm_drones_icon.png",
+   "width": 146,
+   "height": 115,
+   "scalable": false,
+   "spritecook_asset_id": "3eb33508-029c-402c-b2e7-9eaaa4cd2fdf"
+  },
+  {
+   "name": "duel_swords_icon",
+   "file": "ui/menu/duel_swords_icon.png",
+   "width": 100,
+   "height": 100,
+   "scalable": false,
+   "spritecook_asset_id": "eb755249-d748-4f2f-8398-55431845e2c8"
+  },
+  {
+   "name": "garage_aa_vehicle_icon",
+   "file": "ui/menu/garage_aa_vehicle_icon.png",
+   "width": 139,
+   "height": 110,
+   "scalable": false,
+   "spritecook_asset_id": "8a7c572d-f04d-4a31-b5b7-bdccad8a65b6"
+  },
+  {
+   "name": "missions_clipboard_icon",
+   "file": "ui/menu/missions_clipboard_icon.png",
+   "width": 68,
+   "height": 87,
+   "scalable": false,
+   "spritecook_asset_id": "d8fa7268-c145-4cef-8c8b-8249d2c1fe2c"
+  },
+  {
+   "name": "achievements_trophy_icon",
+   "file": "ui/menu/achievements_trophy_icon.png",
+   "width": 86,
+   "height": 89,
+   "scalable": false,
+   "spritecook_asset_id": "40d2042e-09a2-4360-9dda-ac2e3c901da3"
+  },
+  {
+   "name": "records_chart_icon",
+   "file": "ui/menu/records_chart_icon.png",
+   "width": 77,
+   "height": 81,
+   "scalable": false,
+   "spritecook_asset_id": "6514fb3f-bf10-491d-89b8-1ea816156f3e"
+  }
+ ]
+}
