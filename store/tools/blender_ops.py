@@ -34,6 +34,7 @@ GIRLS = {
     "valk": ("ffdc72", "long", "wings,halo,tiara", ["f8f4ea", "eabc36", "efe8d6", "f8f4ea", "eabc36", "armor"], ["302840", "a676ff", "241e30", "302840", "a676ff", "armor"]),
 }
 SKIN = "ffe6d8"
+LOW = False  # облегчённые модели для игры (меньше граней)
 HR, HZ = 0.30, 0.95  # радиус и высота центра головы
 
 
@@ -94,6 +95,9 @@ def finish(o, m, bone, smooth=True, sub=1):
 
 
 def sph(loc, scl, m, bone="spine", seg=24, sub=1, rot=(0, 0, 0)):
+    if LOW:
+        seg = max(8, seg // 2) if max(scl) > 0.05 else 8
+        sub = sub if max(scl) > 0.05 else 0
     bpy.ops.mesh.primitive_uv_sphere_add(segments=seg, ring_count=seg // 2, radius=1, location=loc, rotation=rot)
     o = bpy.context.object
     o.scale = scl
@@ -101,6 +105,8 @@ def sph(loc, scl, m, bone="spine", seg=24, sub=1, rot=(0, 0, 0)):
 
 
 def cone(loc, r1, r2, depth, m, bone="spine", rot=(0, 0, 0), scl=(1, 1, 1), vert=24, sub=1, cap=True):
+    if LOW:
+        vert = max(3, min(vert, 12))
     bpy.ops.mesh.primitive_cone_add(vertices=vert, radius1=r1, radius2=r2, depth=depth, location=loc, rotation=rot,
                                     end_fill_type="NGON" if cap else "NOTHING")
     o = bpy.context.object
@@ -109,7 +115,7 @@ def cone(loc, r1, r2, depth, m, bone="spine", rot=(0, 0, 0), scl=(1, 1, 1), vert
 
 
 def tor(loc, R, r, m, bone="spine", rot=(0, 0, 0)):
-    bpy.ops.mesh.primitive_torus_add(major_radius=R, minor_radius=r, major_segments=40, minor_segments=10, location=loc, rotation=rot)
+    bpy.ops.mesh.primitive_torus_add(major_radius=R, minor_radius=r, major_segments=20 if LOW else 40, minor_segments=5 if LOW else 10, location=loc, rotation=rot)
     o = bpy.context.object
     return finish(o, m, bone, sub=0)
 
@@ -119,7 +125,8 @@ def tube(pts, r, m, bone="spine", r_end=None):
     cu = bpy.data.curves.new("tube", "CURVE")
     cu.dimensions = "3D"
     cu.bevel_depth = r
-    cu.bevel_resolution = 6
+    cu.bevel_resolution = 1 if LOW else 6
+    cu.resolution_u = 4 if LOW else 12
     cu.use_fill_caps = True
     sp = cu.splines.new("NURBS")
     sp.points.add(len(pts) - 1)
@@ -141,7 +148,7 @@ def tube(pts, r, m, bone="spine", r_end=None):
 
 def strand(root, az, el, length, width, tilt, m, bend=0.6, flat=0.45, bone="head"):
     """Прядь: плоский конус от корня на голове вниз, с изгибом. az — вокруг головы (0 — спереди), el — высота корня."""
-    bpy.ops.mesh.primitive_cone_add(vertices=10, radius1=0.004, radius2=width, depth=length, location=(0, 0, 0))
+    bpy.ops.mesh.primitive_cone_add(vertices=6 if LOW else 10, radius1=0.004, radius2=width, depth=length, location=(0, 0, 0))
     o = bpy.context.object
     bm = bmesh.new()
     bm.from_mesh(o.data)
@@ -167,7 +174,7 @@ def face_decal(gid, emo="norm"):
     """Кусок сферы спереди головы с картинкой лица (UV — прямая проекция, как в игре)."""
     x0, x1 = (48 - 128) / 92, (208 - 128) / 92
     z0, z1 = -(142 - 156) / 90, -(250 - 156) / 90
-    n = 24
+    n = 12 if LOW else 24
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
     grid = []
@@ -219,7 +226,7 @@ def noline():
 
 
 def hair_cap(h):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=40, ring_count=20, radius=1, location=(0, 0, HZ + 0.012))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=24 if LOW else 40, ring_count=12 if LOW else 20, radius=1, location=(0, 0, HZ + 0.012))
     o = bpy.context.object
     bm = bmesh.new()
     bm.from_mesh(o.data)
@@ -230,7 +237,7 @@ def hair_cap(h):
     o.scale = (HR * 1.1, HR * 1.08, HR * 1.06)
     sol = o.modifiers.new("sol", "SOLIDIFY")
     sol.thickness = 0.06
-    return finish(o, mat(h, 0.42), "head", sub=2)
+    return finish(o, mat(h, 0.42), "head", sub=1 if LOW else 2)
 
 
 def build_girl(gid, outfit=0):
@@ -511,9 +518,133 @@ def clear():
     MATS.clear()
 
 
+# ---------------------------------------------------------------- экспорт в игру
+BONE_HEAD = {"root": (0, 0, 0), "spine": (0, 0, 0.3), "head": (0, 0, 0.68), "arm.R": (-0.15, 0, 0.6), "arm.L": (0.15, 0, 0.6)}
+
+
+def g3(v):
+    """Оси Blender (Z вверх, вперёд −Y) → оси игры (Y вверх, вперёд −Z), поворот без зеркала."""
+    return (-v[0], v[2], v[1])
+
+
+def srgb8(c):
+    out = []
+    for x in c[:3]:
+        x = max(0.0, min(1.0, x))
+        x = x * 12.92 if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055
+        out.append(int(round(x * 255)))
+    return out
+
+
+def export_game(path):
+    """Формат .ops (gzip, big-endian): «OPS1», число групп; группа: кость, вид (0 обычная, 1 светится, 2 лицо),
+    число вершин и индексов; вершина: позиция int16×3 (/8192, относительно начала кости), нормаль int8×3,
+    цвет sRGB u8×3, UV u16×2 (только у лица); индексы u16 (или u32, если вершин больше 65535)."""
+    import gzip
+    import struct
+    groups = {}
+    dg = bpy.context.evaluated_depsgraph_get()
+    for o, bone in PARTS:
+        oe = o.evaluated_get(dg)
+        me = oe.to_mesh()
+        me.calc_loop_triangles()
+        mw = o.matrix_world
+        nm = mw.to_3x3().inverted().transposed()
+        kind = 2 if o.name.startswith("face") else 0
+        mats = [s.material for s in o.material_slots]
+        uvl = me.uv_layers.active.data if (kind == 2 and me.uv_layers.active) else None
+        hx, hy, hz = BONE_HEAD[bone]
+        for tri in me.loop_triangles:
+            m = mats[tri.material_index] if mats else None
+            col, k = (1, 1, 1, 1), kind
+            if m is not None and kind != 2:
+                b = m.node_tree.nodes.get("Principled BSDF")
+                col = tuple(b.inputs["Base Color"].default_value)
+                if b.inputs["Emission Strength"].default_value > 0:
+                    k = 1
+            g = groups.setdefault((bone, k), {"v": [], "map": {}, "i": []})
+            cs = srgb8(col)
+            for li in tri.loops:
+                lp = me.loops[li]
+                p = mw @ me.vertices[lp.vertex_index].co
+                n = (nm @ (lp.normal if tri.use_smooth else tri.normal)).normalized()
+                p = g3((p.x - hx, p.y - hy, p.z - hz))
+                n = g3(n)
+                uv = (0, 0)
+                if uvl is not None:
+                    u = uvl[li].uv
+                    uv = (int(max(0, min(1, u.x)) * 65535), int(max(0, min(1, 1 - u.y)) * 65535))
+                key = (round(p[0] * 8192), round(p[1] * 8192), round(p[2] * 8192),
+                       round(n[0] * 127), round(n[1] * 127), round(n[2] * 127), cs[0], cs[1], cs[2], uv[0], uv[1])
+                idx = g["map"].get(key)
+                if idx is None:
+                    idx = len(g["v"])
+                    g["map"][key] = idx
+                    g["v"].append(key)
+                g["i"].append(idx)
+        oe.to_mesh_clear()
+    buf = bytearray(b"OPS1")
+    buf += struct.pack(">H", len(groups))
+    for (bone, k), g in groups.items():
+        bn = bone.encode()
+        buf += struct.pack(">B", len(bn)) + bn
+        nv, ni = len(g["v"]), len(g["i"])
+        buf += struct.pack(">BII", k, nv, ni)
+        for v in g["v"]:
+            buf += struct.pack(">hhhbbbBBB", *[max(-32767, min(32767, x)) for x in v[:3]], *v[3:9])
+            if k == 2:
+                buf += struct.pack(">HH", v[9], v[10])
+        fmt = ">%d%s" % (ni, "H" if nv <= 65535 else "I")
+        buf += struct.pack(fmt, *g["i"])
+    with gzip.open(path, "wb", compresslevel=9) as f:
+        f.write(bytes(buf))
+    return sum(len(g["i"]) for g in groups.values()) // 3
+
+
+def portrait(cam, path):
+    sc = bpy.context.scene
+    sc.render.resolution_x = 256
+    sc.render.resolution_y = 256
+    sc.render.film_transparent = True
+    sc.render.line_thickness = 1.4
+    for o in bpy.data.objects:
+        if o.type == "MESH" and o.name.startswith("Plane"):
+            o.hide_render = True
+    cam.data.lens = 85
+    aim(cam, -0.28, el=0.08, dist=2.3, tz=HZ - 0.06)
+    sc.render.filepath = path
+    bpy.ops.render.render(write_still=True)
+
+
+def game_assets(out, ids):
+    """Модели для игры (.ops) и портреты 200×200 для меню — оба наряда."""
+    global LOW
+    from PIL import Image
+    os.makedirs(out, exist_ok=True)
+    for gid in ids:
+        for of in (0, 1):
+            clear()
+            LOW = True
+            build_girl(gid, of)
+            tris = export_game(os.path.join(out, f"{gid}_{of}.ops"))
+            clear()
+            LOW = False
+            build_girl(gid, of)  # портрет — с полной детализацией
+            cam = scene_setup(256)
+            bpy.context.scene.cycles.samples = 32
+            tmp = os.path.join(out, f"_por_{gid}_{of}.png")
+            portrait(cam, tmp)
+            Image.open(tmp).resize((200, 200), Image.LANCZOS).save(os.path.join(ROOT, "assets", "ops", f"{gid}_{of}_por.png"), optimize=True)
+            os.remove(tmp)
+            print("game", gid, of, tris, flush=True)
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/blender_ops"
     ids = sys.argv[2].split(",") if len(sys.argv) > 2 else list(GIRLS)
+    if os.environ.get("GAME"):
+        game_assets(out, ids)
+        return
     outfit = int(os.environ.get("OUTFIT", "0"))
     res = int(os.environ.get("RES", "720"))
     os.makedirs(out, exist_ok=True)

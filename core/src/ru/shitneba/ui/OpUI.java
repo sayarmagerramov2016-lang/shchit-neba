@@ -151,39 +151,22 @@ public class OpUI {
         float sway = 1.2f * MathUtils.sin(T * 1.1f);
         float x0 = cxm - IW * k / 2 + shx, y0 = H - 6 - IH * k * breath - lift;
         gx = x0; gy = y0; gk = k;
-        // сияние за спиной у легендарок и мифика
-        if (o.rar >= 3) {
-            Color gc = rc(o.rar);
-            float pr = 0.7f + 0.3f * MathUtils.sin(T * 2.5f);
-            for (int i = 4; i >= 1; i--) d.circle(cxm, y0 + 190 * k, (70 + i * 26) * k, gc, 0.06f * pr);
-        }
-        // эмоция
+        // эмоция — для 3D-модели (рисуется раньше интерфейса, в overlay3D)
         String e;
         if (emoT > 0) e = emo;
         else if (lost) e = "cry";
         else if (g.hp < g.st("maxHp") * 0.3f && g.hp > 0) e = "worry";
         else e = "norm";
         if (blinkT < 0) { if (blinkT < -0.12f) blinkT = 2.5f + MathUtils.random(2.5f); else if (e.equals("norm") || e.equals("worry")) e = "blink"; }
-        String base = outfit(o);
-        // тело (качается вокруг ног)
-        float ox = IW * k / 2, oy = IH * k * breath;
-        d.b.setColor(Color.WHITE);
-        d.b.draw(t(base + "_body"), x0, y0, ox, oy, IW * k, IH * k * breath, 1, 1, sway);
-        // лицо — с тем же поворотом вокруг той же точки
-        float fx = x0 + FACE_X * k, fy = y0 + FACE_Y * k * breath;
-        d.b.draw(t(o.id + "_face_" + e), fx, fy, ox - FACE_X * k, oy - FACE_Y * k * breath, FACE_W * k, FACE_H * k * breath, 1, 1, sway);
-        // рука на прицел
-        float sxp = x0 + SH_X * k, syp = y0 + SH_Y * k * breath;
-        float tgt = -135;
-        if (g.state.equals("run") && u.proj(g.aimPoint, u.sp2)) tgt = MathUtils.atan2(u.sp2.y - syp, u.sp2.x - sxp) * MathUtils.radDeg;
-        if (lost) tgt = 110;
-        tgt = lost ? tgt : MathUtils.clamp(tgt, -175, -15);
-        armAng += (tgt - armAng) * Math.min(1, dt * 8);
-        d.b.draw(t(base + "_arm"), sxp - ARM_PX * k, syp - ARM_PY * k, ARM_PX * k, ARM_PY * k, ARM_W * k, ARM_H * k, 1, 1, armAng);
+        curEmo = e; curLift = lift / gh; curShake = shx / gh;
         // частицы
         if (o.rar >= 2) {
             partAcc += dt * (o.rar >= 3 ? 7 : 4);
-            while (partAcc > 1) { partAcc -= 1; spawn(cxm + MathUtils.random(-90, 90) * k, y0 + MathUtils.random(40, 480) * k, false); }
+            while (partAcc > 1) { // вокруг неё, а не по лицу
+                partAcc -= 1;
+                float side = MathUtils.randomBoolean() ? 1 : -1;
+                spawn(cxm + side * MathUtils.random(95, 150) * k, y0 + MathUtils.random(40, 480) * k, false);
+            }
         }
         drawParts(dt, o);
         // пузырь с репликой
@@ -206,6 +189,77 @@ public class OpUI {
             d.text(s, W / 2, H * 0.36f, 36 * sc, new Color(c.r, c.g, c.b, a), Draw.WIDE, 0);
             d.text(o.name, W / 2, H * 0.36f + 26, 15, new Color(1, 1, 1, 0.9f * a), Draw.BOLD, 0);
         }
+    }
+
+    // =========================================================
+    //          3D-девчонка (модель из Blender) поверх сцены
+    // =========================================================
+    String curEmo = "norm"; float curLift, curShake;
+    ru.shitneba.Girl3D.Model gm; String gmKey = "";
+    final com.badlogic.gdx.graphics.PerspectiveCamera ocam = new com.badlogic.gdx.graphics.PerspectiveCamera(30, 1, 1);
+    final com.badlogic.gdx.math.Quaternion armQ = new com.badlogic.gdx.math.Quaternion(), tq = new com.badlogic.gdx.math.Quaternion();
+    final com.badlogic.gdx.math.Vector3 v1 = new com.badlogic.gdx.math.Vector3(), v2 = new com.badlogic.gdx.math.Vector3();
+    final com.badlogic.gdx.math.Matrix4 m4 = new com.badlogic.gdx.math.Matrix4();
+    /** Куда смотрит вытянутая рука в покое (плечо → кончик пальца), оси игры. */
+    static final com.badlogic.gdx.math.Vector3 ARM_REST = new com.badlogic.gdx.math.Vector3(0.25f, 0.105f, -0.305f).nor();
+
+    /** Вызывается после рендера сцены, до интерфейса. */
+    public void overlay3D(ru.shitneba.gfx.Renderer r) {
+        Game g = u.g;
+        Ops.Op o = g.op;
+        if (o == null || !u.girlVisible()) return;
+        String key = outfit(o);
+        if (gm == null || !key.equals(gmKey)) {
+            gm = ru.shitneba.Girl3D.build(o.id, Ops.alt(o.id) ? 1 : 0);
+            gmKey = key;
+        }
+        gm.emotion(curEmo);
+        float T = u.T;
+        int bw = Gdx.graphics.getBackBufferWidth(), bh = Gdx.graphics.getBackBufferHeight();
+        float H = d.h, gh = Math.min(H * 0.44f, 300);
+        // камера: ноги у низа экрана, рост gh, центр по x на 0.6 ширины
+        float t = (float) Math.tan(Math.toRadians(15));
+        float nf = 1 - 2 * (H - 6) / H, nh = 1 - 2 * (H - 6 - gh) / H;
+        float D = ru.shitneba.Girl3D.TOP / ((nh - nf) * t);
+        float ch = -nf * D * t, aspect = bw / (float) bh;
+        float cx = 0.2f * D * t * aspect;
+        ocam.fieldOfView = 30; ocam.viewportWidth = bw; ocam.viewportHeight = bh;
+        ocam.near = 0.1f; ocam.far = 60;
+        ocam.position.set(cx, ch, -D);
+        ocam.direction.set(0, 0, 1); ocam.up.set(0, 1, 0);
+        ocam.update();
+        // поза
+        float H3 = ru.shitneba.Girl3D.TOP;
+        gm.root.pos.set(curShake * H3 * 1.3f, curLift * H3 * 1.3f, 0);
+        gm.root.setEuler(0, -0.42f, 0.03f * MathUtils.sin(T * 1.1f));
+        gm.shadow.pos.y = 0.005f - gm.root.pos.y;
+        float sc = 1 - Math.min(0.5f, gm.root.pos.y * 1.5f);
+        gm.shadow.scl.set(sc, 1, sc);
+        gm.spine.scl.set(1, 1 + 0.015f * MathUtils.sin(T * 2.2f), 1);
+        if (lost) gm.head.setEuler(-0.35f, 0, 0.1f);
+        else gm.head.setEuler(0.04f * MathUtils.sin(T * 0.9f), 0.12f * MathUtils.sin(T * 0.7f), 0.06f * MathUtils.sin(T * 1.3f));
+        // левая рука: радуется — машет, иначе у груди
+        if (curEmo.equals("joy") || curEmo.equals("shout")) gm.armL.setEuler(0, 0, -1.9f + 0.35f * MathUtils.sin(T * 16));
+        else if (lost) gm.armL.setEuler(0.4f, 0, 0);
+        else gm.armL.setEuler(0, 0, 0);
+        // правая рука — на прицел
+        gm.root.updateGlobal(null);
+        boolean aimOk = !lost && g.state.equals("run") && u.proj(g.aimPoint, u.sp2);
+        if (aimOk) {
+            com.badlogic.gdx.math.collision.Ray ray = ocam.getPickRay(u.sp2.x * d.s, u.sp2.y * d.s, 0, 0, bw, bh);
+            gm.armR.parent.global.getTranslation(v1);
+            v2.set(gm.armR.pos).mul(gm.armR.parent.global); // плечо в мире
+            // точка на плоскости девчонки, куда указывает прицел, плюс немного вглубь — рука тянется вперёд
+            float k = (v2.z + 8f - ray.origin.z) / ray.direction.z; // цель — в глубине сцены, за девчонкой
+            v1.set(ray.direction).scl(k).add(ray.origin).sub(v2).nor();
+            m4.set(gm.armR.parent.global).inv();
+            v1.rot(m4).nor();
+            tq.setFromCross(ARM_REST, v1);
+        } else if (lost) tq.setEulerAngles(0, 70, 0);
+        else tq.idt();
+        armQ.slerp(tq, Math.min(1, Gdx.graphics.getDeltaTime() * 8));
+        gm.armR.rot.set(armQ);
+        r.renderOverlay(gm.root, ocam);
     }
 
     void spawn(float x, float y, boolean burst) {

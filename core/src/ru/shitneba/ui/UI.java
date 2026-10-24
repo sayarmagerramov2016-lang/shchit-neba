@@ -135,6 +135,12 @@ public class UI implements GameUI, InputProcessor {
         if (name.equals("menu")) g.ensureQuests();
     }
 
+    /** Видна ли девчонка-оператор в бою (те же условия, что у боевого HUD). */
+    boolean girlVisible() {
+        boolean hud = panel.isEmpty() && (g.state.equals("run") || g.state.equals("dying") || g.state.equals("over") || g.state.equals("result"));
+        return hud && !(strike != null && strike.active) && !bossRole() && g.killCamK() <= 0;
+    }
+
     boolean inBattle() { return panel.isEmpty() && (g.state.equals("run") || g.state.equals("dying")); }
 
     public void launch(final String m) {
