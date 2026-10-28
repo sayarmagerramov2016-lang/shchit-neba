@@ -126,6 +126,8 @@ public class Strike {
     public boolean resRec, resRankUp;
     public int resCoins, resXp;
     float lateOverT = -1, lateBlastT = -1;
+    /** Игрок нажал «Завершить забег»: после взрыва — сразу итог, без нового рубежа. */
+    boolean ending;
     final Vector3 lateBlastP = new Vector3();
     public GameUI ui;
     final Random R = new Random();
@@ -153,7 +155,6 @@ public class Strike {
     }
 
     public static Stats calcStats(String k) {
-        G.Save s = G.SV;
         DroneDef b = DRONES.get(k);
         int w = up("war"), ba = up("bat"), h = up("hull"), e = up("ecm");
         Stats o = new Stats();
@@ -201,7 +202,7 @@ public class Strike {
         root3.kids.clear();
         active = true; paused = false; fade = 0; fadeHold = 0;
         zone = 0; score = 0; stock = START_STOCK; aaKills = 0; tgKills = 0; sorties = 0; chain = 0; feed.clear();
-        lateOverT = -1; lateBlastT = -1;
+        lateOverT = -1; lateBlastT = -1; ending = false;
         nextZone();
         zoneSorties0 = 0;
         launch();
@@ -501,7 +502,7 @@ public class Strike {
     }
 
     void zoneClear() {
-        if (st.equals("clear") || st.equals("over")) return;
+        if (st.equals("clear") || st.equals("over") || ending) return;
         int bonus = 400 + zone * 150;
         int back = 0;
         if (D.alive) {
@@ -860,10 +861,8 @@ public class Strike {
         if (st.equals("boom")) {
             boomT -= dt;
             if (boomT <= 0) {
-                int left = targetsLeft();
-                if (left == 0) { /* ждём рубеж */ }
-                else if (stock > 0) launch();
-                else gameOver();
+                if (ending || (targetsLeft() > 0 && stock <= 0)) gameOver();
+                else if (targetsLeft() > 0) launch();
             }
         } else if (st.equals("clear")) {
             clearT -= dt;
@@ -899,7 +898,7 @@ public class Strike {
     }
 
     public void endRun() {
-        paused = false; stock = 0;
+        paused = false; stock = 0; ending = true;
         if (D.alive && st.equals("fly")) detonate(D.pos, null, 1f);
         else if (!st.equals("over")) gameOver();
     }

@@ -26,7 +26,7 @@ public class MB {
     public static final class Prim { public float[] d; public int n; }
 
     static final Map<String, Prim> cache = new HashMap<>();
-    static final Vector3 ta = new Vector3(), tb = new Vector3(), tc = new Vector3(), tn = new Vector3();
+    static final Vector3 ta = new Vector3(), tb = new Vector3(), tc = new Vector3();
 
     public int count() { return v.size / Mesh3.STRIDE; }
     public boolean empty() { return v.size == 0; }
@@ -410,8 +410,6 @@ public class MB {
 
     public MB append(MB o) { v.addAll(o.v); return this; }
 
-    public static void clearCache() { cache.clear(); }
-
     // публичные примитивы (для «мультимешей», запекаемых в один меш)
     public static Prim pBox(float w, float h, float d) { final float a = w, b = h, c = d; return prim("b" + w + "_" + h + "_" + d, () -> boxPrim(a, b, c)); }
     public static Prim pCyl(float rt, float rb, float h, int seg, boolean caps) { final float a = rt, b = rb, c = h; final int s = seg; final boolean cp = caps; return prim("c" + rt + "_" + rb + "_" + h + "_" + seg + (caps ? "" : "nc"), () -> cylPrim(a, b, c, s, cp)); }
@@ -422,7 +420,7 @@ public class MB {
     public static Prim pHairCap(final int radial, final int rings, final float zc, final float yc) {
         return prim("hc" + radial + "_" + rings + "_" + zc + "_" + yc, () -> {
             Prim s = sphPrim(1f, 2f, radial, rings);
-            com.badlogic.gdx.utils.FloatArray o = new com.badlogic.gdx.utils.FloatArray(s.d.length);
+            FloatArray o = new FloatArray(s.d.length);
             for (int t = 0; t < s.n; t += 3) {
                 float cz = 0, cy = 0;
                 for (int k = 0; k < 3; k++) { cy += s.d[(t + k) * 8 + 1]; cz += s.d[(t + k) * 8 + 2]; }

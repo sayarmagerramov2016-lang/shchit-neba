@@ -5,12 +5,12 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 
 import java.util.HashMap;
 import java.util.Map;
 
+import ru.shitneba.BlackBox;
 import ru.shitneba.G;
 import ru.shitneba.Game;
 import ru.shitneba.Ops;
@@ -38,7 +38,7 @@ public class OpUI {
                 t = new Texture(Gdx.files.internal("ops/" + name + ".png"), true);
                 t.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);
             } catch (Exception e) {
-                ru.shitneba.BlackBox.mark("нет картинки ops/" + name);
+                BlackBox.mark("нет картинки ops/" + name);
                 t = d.white;
             }
             r = new TextureRegion(t);
@@ -733,5 +733,4 @@ public class OpUI {
         tx.clear();
     }
 
-    static Vector2 tmp = new Vector2();
 }

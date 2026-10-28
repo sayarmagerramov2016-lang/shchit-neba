@@ -6,6 +6,7 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.FloatArray;
 
 import java.util.Random;
 
@@ -101,7 +102,7 @@ public final class FX {
 
     static P obtain() { return free.size > 0 ? free.pop() : new P(); }
 
-    static final Vector3 tdir = new Vector3();
+    static final Vector3 tdir = new Vector3(), rdA = new Vector3(), rdB = new Vector3();
 
     static void randDir(Cfg c, Vector3 out) {
         if (c.spread >= 179f) {
@@ -112,8 +113,8 @@ public final class FX {
         float ang = c.spread * MathUtils.degreesToRadians * (float) Math.sqrt(R.nextFloat());
         float th = R.nextFloat() * MathUtils.PI2;
         Vector3 d = c.dir;
-        Vector3 t1 = Math.abs(d.y) < 0.9f ? new Vector3(0, 1, 0).crs(d).nor() : new Vector3(1, 0, 0).crs(d).nor();
-        Vector3 t2 = new Vector3(d).crs(t1);
+        Vector3 t1 = (Math.abs(d.y) < 0.9f ? rdA.set(Vector3.Y) : rdA.set(Vector3.X)).crs(d).nor();
+        Vector3 t2 = rdB.set(d).crs(t1);
         float sa = MathUtils.sin(ang), ca = MathUtils.cos(ang);
         out.set(d).scl(ca).mulAdd(t1, sa * MathUtils.cos(th)).mulAdd(t2, sa * MathUtils.sin(th)).nor();
     }
@@ -145,8 +146,6 @@ public final class FX {
     }
 
     static final Cfg sphereCfg = new Cfg();
-
-    static float[] grad(float... v) { return v; }
 
     // ---------- эффекты (fx.gd) ----------
     static final Cfg EMBER_SMOKE = new Cfg().kind(K_SMOKE).vel(0.2f, 0.6f).damp(0.5f, 1f).grav(0, 1.5f, 0).scale(0.9f, 1.4f).curve(0.6f, 2.4f)
@@ -273,7 +272,7 @@ public final class FX {
     }
 
     // ---------- свечения на один кадр (раскалённые стволы) ----------
-    static final com.badlogic.gdx.utils.FloatArray fglow = new com.badlogic.gdx.utils.FloatArray();
+    static final FloatArray fglow = new FloatArray();
 
     public static void frameGlow(Vector3 p, float size, float r, float g, float b, float a) {
         fglow.add(p.x, p.y, p.z, size); fglow.add(r, g, b, a);
@@ -344,7 +343,7 @@ public final class FX {
         public final Vector3 off = new Vector3(), fixed = new Vector3();
         public Cfg cfg;
         public float rate, acc;
-        public boolean emitting = true, dead = false, detached = false;
+        public boolean emitting = true;
         public float killAt = -1;
         public float t;
         public Glow glowCfg;
@@ -405,11 +404,9 @@ public final class FX {
     public static void detach(Emitter e) {
         if (e == null) return;
         if (e.anchor != null) { e.anchor.toGlobal(e.off, e.fixed); }
-        e.anchor = null; e.detached = true; e.emitting = false; e.glowCfg = null;
+        e.anchor = null; e.emitting = false; e.glowCfg = null;
         e.killAt = e.t + 3f;
     }
-
-    public static void kill(Emitter e) { if (e != null) e.dead = true; }
 
     /** Факел ракеты: ядро-конус + свечение. */
     public static Node3 flame(float tailZ) {
@@ -432,7 +429,7 @@ public final class FX {
         for (int i = emitters.size - 1; i >= 0; i--) {
             Emitter e = emitters.get(i);
             e.t += dt;
-            if (e.dead || (e.killAt > 0 && e.t > e.killAt)) { if (e.fire) fires = Math.max(0, fires - 1); emitters.removeIndex(i); continue; }
+            if (e.killAt > 0 && e.t > e.killAt) { if (e.fire) fires = Math.max(0, fires - 1); emitters.removeIndex(i); continue; }
             if (e.anchor != null && !attached(e.anchor)) { emitters.removeIndex(i); continue; }
             if (!e.emitting) continue;
             if (e.anchor != null) e.anchor.toGlobal(e.off, tv); else tv.set(e.fixed);
@@ -485,9 +482,8 @@ public final class FX {
     }
 
     static void emit1(Cfg c, Vector3 at) {
+        // на телефоне непрерывные эмиттеры редеют на 30%
         if (G.isMobile() && R.nextFloat() < 0.3f) return;
-        boolean m = G.isMobile();
-        // emit без мобильного урезания количества (оно уже вероятностное)
         if (parts.size >= MAX) return;
         P p = obtain();
         p.c = c; p.x = at.x; p.y = at.y; p.z = at.z;
@@ -501,6 +497,7 @@ public final class FX {
         p.vx = tdir.x * v; p.vy = tdir.y * v; p.vz = tdir.z * v;
         p.age = 0; p.life = c.life; p.sc = rr(c.sMin, c.sMax); p.damp = rr(c.dMin, c.dMax);
         p.rot = R.nextFloat() * MathUtils.PI2; p.rotV = 0;
+        p.tacc = 0; p.landed = false; // частица могла прийти из пула «приземлившейся» гильзой или обломком
         parts.add(p);
     }
 

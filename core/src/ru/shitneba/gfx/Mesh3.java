@@ -4,7 +4,6 @@ import com.badlogic.gdx.graphics.Mesh;
 import com.badlogic.gdx.graphics.VertexAttribute;
 import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
 
 /** Неиндексированный меш треугольников: pos3 nrm3 col4 uv2. */
@@ -15,7 +14,6 @@ public class Mesh3 implements Disposable {
             new VertexAttribute(VertexAttributes.Usage.Normal, 3, "a_normal"),
             new VertexAttribute(VertexAttributes.Usage.ColorUnpacked, 4, "a_color"),
             new VertexAttribute(VertexAttributes.Usage.TextureCoordinates, 2, "a_texCoord0"));
-    static final Array<Mesh3> ALL = new Array<>();
 
     public final Mesh mesh;
     public final int count;
@@ -36,11 +34,8 @@ public class Mesh3 implements Disposable {
         float r = 0;
         for (int i = 0; i < floats; i += STRIDE) r = Math.max(r, center.dst2(v[i], v[i + 1], v[i + 2]));
         radius = (float) Math.sqrt(r);
-        ALL.add(this);
     }
 
     @Override
-    public void dispose() { mesh.dispose(); ALL.removeValue(this, true); }
-
-    public static void disposeAll() { for (Mesh3 m : new Array<>(ALL)) m.dispose(); }
+    public void dispose() { mesh.dispose(); }
 }

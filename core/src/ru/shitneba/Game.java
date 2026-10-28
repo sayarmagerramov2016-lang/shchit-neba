@@ -4,11 +4,13 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.JsonValue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -98,7 +100,7 @@ public class Game {
     // ---------- кампания ----------
     public JsonValue CM;
     public Mission obj;
-    public float missionT, missionTime2;
+    public float missionT;
     float timeSaid;
     JsonValue squadMix;
     public static final class Mission { public String name, kind; public float hp, max, r = 7; public final Vector3 aim = new Vector3(); public final Array<Objs.Obj> models = new Array<>(); }
@@ -149,7 +151,7 @@ public class Game {
         public final Vector3 runV = new Vector3(); public boolean hasRunV; public int runI = -1; public float rt;
         public float cloakT = 6, reT = 22, shT = 6; public Node3 dome; public float flash; public boolean keep; public int id;
         public boolean pc, pcInv, net;
-        public final Vector3 tgtPos = new Vector3(); public final com.badlogic.gdx.math.Quaternion tgtRot = new com.badlogic.gdx.math.Quaternion(); public boolean hasTgt;
+        public final Vector3 tgtPos = new Vector3(); public final Quaternion tgtRot = new Quaternion(); public boolean hasTgt;
     }
 
     public Game() {
@@ -353,8 +355,7 @@ public class Game {
 
     public E duelBoss() {
         if (bossE != null) return bossE;
-        for (E e : bosses) return e;
-        return null;
+        return bosses.size > 0 ? bosses.first() : null;
     }
 
     void duelRules(float dt) {
@@ -1751,7 +1752,7 @@ public class Game {
     public void useAbility(String k) {
         if (!state.equals("run") || !Boolean.TRUE.equals(AB().get(k))) return;
         if (netView) {
-            if (duelRole.equals("pvo")) { int i = java.util.Arrays.asList("salvo", "emp", "smoke", "repair").indexOf(k); if (i >= 0) netAb[i]++; }
+            if (duelRole.equals("pvo")) { int i = Arrays.asList("salvo", "emp", "smoke", "repair").indexOf(k); if (i >= 0) netAb[i]++; }
             return;
         }
         if (k.equals("salvo")) {
@@ -1988,7 +1989,7 @@ public class Game {
             if (mode.equals("endless")) bonus = addCoins((15 + 6 * wave) * difCoin * (!waveHit ? 1.5f : 1f));
             opEv("clear");
             if (ui != null) ui.banner("Волна отбита", false, bonus > 0 ? String.format("Прочность +%d · награда +%d монет%s", (int) st("regen"), bonus, !waveHit ? " (без урона ×1.5)" : "") : "Прочность +" + (int) st("regen"));
-            if (mode.equals("endless") && ui != null) ui.toast("Монеты боя: " + RUN.c + " — жми ₽ для улучшений");
+            if (mode.equals("endless") && ui != null) ui.toast("Монеты боя: " + RUN.c + " — трать их в «Улучшениях»");
             checkAch();
         }
     }
@@ -2093,10 +2094,10 @@ public class Game {
     }
 
     void missionFail(String reason) {
-        opEv("lose");
-        BlackBox.log("миссия провалена: " + reason);
         if (!(state.equals("run") || state.equals("dying"))) return;
         if (!mode.equals("campaign")) return;
+        BlackBox.log("миссия провалена: " + reason);
+        opEv("lose");
         state = "result"; firing = false; G.save(); G.sfx("fail"); G.hap(60);
         resWin = false; resOk = null; resGot = 0; resReward = 0; resReason = reason; resM = CM;
         final JsonValue cm = CM;
@@ -2271,6 +2272,7 @@ public class Game {
         if (state.equals("pause") || state.equals("shop")) return;
         if (state.equals("run") || state.equals("dying") || state.equals("result")) {
             for (int i = timers.size - 1; i >= 0; i--) {
+                if (i >= timers.size) continue; // таймер мог очистить список (выход из боя)
                 Timer tm = timers.get(i);
                 tm.t -= dt;
                 if (tm.t <= 0) { timers.removeIndex(i); tm.r.run(); }

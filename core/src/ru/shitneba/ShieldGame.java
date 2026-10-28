@@ -10,10 +10,13 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.BufferUtils;
+import com.badlogic.gdx.utils.JsonValue;
 import com.badlogic.gdx.utils.ScreenUtils;
 
+import java.util.ArrayList;
+
 import ru.shitneba.gfx.Dyn;
-import ru.shitneba.gfx.MB;
+import ru.shitneba.gfx.FpvFx;
 import ru.shitneba.gfx.Node3;
 import ru.shitneba.gfx.Renderer;
 import ru.shitneba.ui.Draw;
@@ -37,7 +40,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     Draw draw;
     Strike strike;
     Duel duel;
-    ru.shitneba.gfx.FpvFx fpv;
+    FpvFx fpv;
     PerspectiveCamera cam;
     final Array<Node3> roots = new Array<>();
     final Array<Dyn> dyns = new Array<>();
@@ -53,7 +56,6 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         BlackBox.hold = true;
         BlackBox.mark("загрузка");
         G.sfx = new Sfx();
-        MB.hq = G.SV.gfx >= 2 && !G.isMobile();
         Models.initMaterials();
         rend = new Renderer();
         FX.init();
@@ -75,7 +77,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         roots.add(strike.root3);
         duel = new Duel(game);
         duel.ui = ui; game.duel = duel; ui.duel = duel;
-        fpv = new ru.shitneba.gfx.FpvFx();
+        fpv = new FpvFx();
         if (forceVeh != null) { G.SV.veh = forceVeh; for (String v : G.VEHS) if (!G.SV.vown.contains(v)) G.SV.vown.add(v); }
         game.VEH = G.SV.veh;
         applyGfxNoRebuild();
@@ -113,7 +115,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     void warmBuild() {
         warm = new Node3();
         int i = 0;
-        for (com.badlogic.gdx.utils.JsonValue t = G.D.get("DT").child; t != null; t = t.next, i++) {
+        for (JsonValue t = G.D.get("DT").child; t != null; t = t.next, i++) {
             for (String acc : new String[]{"harpy", "manti"}) {
                 try {
                     Models.EnemyModel m = Models.enemy(t.name, acc);
@@ -239,6 +241,9 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         BlackBox.log("развёрнута");
     }
 
+    /** Отладка: SN_TEST=crash | freeze | lowres. */
+    static final String TEST = System.getenv("SN_TEST");
+
     int bbFrame;
 
     void bbInfo() {
@@ -253,7 +258,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         BlackBox.tick();
         BlackBox.mark("кадр");
         bbInfo();
-        String tst = System.getenv("SN_TEST");
+        String tst = TEST;
         if (tst != null && T > 4f && T < 4.2f) {
             if (tst.equals("crash")) throw new IllegalStateException("тестовый вылет чёрного ящика");
             if (tst.equals("freeze")) { BlackBox.mark("тест: зависание"); try { Thread.sleep(4000); } catch (InterruptedException ignored) { } T = 5f; }
@@ -262,7 +267,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         if (shotDir != null) dt = 1f / 30f;
         T += dt;
         if (shotDir == null) dynScale(Gdx.graphics.getDeltaTime());
-        else if ("lowres".equals(System.getenv("SN_TEST"))) rend.scale = 0.6f;
+        else if ("lowres".equals(TEST)) rend.scale = 0.6f;
         if (botOn && !strike.active) bot(dt);
         BlackBox.mark("дуэль: сеть");
         duel.update(dt);
@@ -347,7 +352,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     static String[][] storeSeq() {
         String env = System.getenv("SN_STORE");
         String[] ids = env != null ? env.split(",") : new String[]{"6-2", "9-1", "4-1", "7-1", "10-1", "2-1", "8-1"};
-        java.util.ArrayList<String[]> out = new java.util.ArrayList<>();
+        ArrayList<String[]> out = new ArrayList<>();
         out.add(new String[]{"menu", "3"});
         for (String id : ids) out.add(new String[]{"st_" + id, "13"});
         out.add(new String[]{"end", "0"});
@@ -382,7 +387,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     static String[][] mapsSeq() {
         String env = System.getenv("SN_MAPS");
         String[] ids = env != null ? env.split(",") : new String[]{"1-3", "2-2", "3-1", "4-1", "5-3", "6-2", "7-1", "8-1", "9-1", "10-1", "11-2"};
-        java.util.ArrayList<String[]> out = new java.util.ArrayList<>();
+        ArrayList<String[]> out = new ArrayList<>();
         out.add(new String[]{"menu", "3"});
         for (String id : ids) for (int k = 0; k < 4; k++) out.add(new String[]{"m_" + id + "_" + k, k == 0 ? "3" : "1.5"});
         out.add(new String[]{"end", "0"});
@@ -488,7 +493,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "fx_dusk": world.nightK = 0.45f; world.nightTgt = 0.45f; break;
             case "fx_night": world.nightK = 1f; world.nightTgt = 1f; break;
             case "fx_storm": world.stormK = 1f; world.stormTgt = 1f; world.wind = 30; break;
-            case "fx_bolt": world.debugBolt(cam.position); break;
+            case "fx_bolt": world.debugBolt(); break;
             case "fx_nboom": game.explosion(ahead(45, 2f), 2f); break;
             default:
                 if (next.startsWith("oa_")) { if (next.equals("oa_sad")) game.opDebugLose(); ui.op.debugAct(next.substring(3)); break; }
@@ -529,7 +534,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     void save(String path) {
         int w = Gdx.graphics.getBackBufferWidth(), h = Gdx.graphics.getBackBufferHeight();
         byte[] px = ScreenUtils.getFrameBufferPixels(0, 0, w, h, true);
-        for (int i = 4; i < px.length; i += 4) px[i - 1] = (byte) 255;
+        for (int i = 3; i < px.length; i += 4) px[i] = (byte) 255; // непрозрачная альфа у каждого пикселя
         Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
         BufferUtils.copy(px, 0, p.getPixels(), px.length);
         PixmapIO.writePNG(Gdx.files.absolute(path), p);
@@ -543,7 +548,9 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         BlackBox.stop();
         G.save();
         ui.kit.dispose();
+        ui.op.dispose();
         draw.dispose();
+        world.dispose();
         duel.stop();
         fpv.dispose();
         rend.dispose();
