@@ -126,8 +126,6 @@ public class Draw implements Disposable {
 
     float lineGap(BitmapFont f) { return (f.getLineHeight() - f.getCapHeight()) * 0.9f; }
 
-    public float lineH(float size, int font) { return font(font, size).getLineHeight(); }
-
     // ---------- примитивы ----------
     float pack(Color c, float a) { return Color.toFloatBits(c.r, c.g, c.b, c.a * a); }
 

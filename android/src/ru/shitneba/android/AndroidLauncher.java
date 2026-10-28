@@ -33,4 +33,10 @@ public class AndroidLauncher extends AndroidApplication {
         cfg.depth = 24;
         initialize(new ShieldGame(), cfg);
     }
+
+    @Override
+    protected void onDestroy() {
+        try { if (lock != null && lock.isHeld()) lock.release(); } catch (Throwable ignored) { }
+        super.onDestroy();
+    }
 }

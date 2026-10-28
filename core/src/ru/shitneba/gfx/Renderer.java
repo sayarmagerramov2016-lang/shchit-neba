@@ -157,7 +157,9 @@ public class Renderer implements Disposable {
         bindMat(m);
         if (n.alpha < 0.999f) curProg.setUniformf("u_h3", m.burnt, m.wear, 0, m.alpha * n.alpha);
         curProg.setUniformMatrix("u_world", n.global);
-        nmat.set(n.global).inv().transpose();
+        nmat.set(n.global);
+        if (Math.abs(nmat.det()) > 1e-12f) nmat.inv().transpose(); else nmat.idt(); // сплющенный узел — без вылета на обращении
+
         curProg.setUniformMatrix("u_nmat", nmat);
         n.mesh.mesh.render(curProg, GL20.GL_TRIANGLES, 0, n.mesh.count);
         if (n.alpha < 0.999f) curMat = null;
@@ -351,5 +353,6 @@ public class Renderer implements Disposable {
         if (sceneFbo != null) sceneFbo.dispose();
         if (blitQuad != null) blitQuad.dispose();
         if (blitProg != null) blitProg.dispose();
+        if (panelTex != null) panelTex.dispose();
     }
 }

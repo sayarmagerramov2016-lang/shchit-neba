@@ -1,5 +1,6 @@
 package ru.shitneba;
 
+import com.badlogic.gdx.Application.ApplicationType;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
@@ -44,7 +45,6 @@ public final class G {
         public final List<String> ach = new ArrayList<>();
         public final Map<String, Integer> chal = new LinkedHashMap<>();
         public String dailyLast = ""; public int dailyStreak;
-        public String dmis = "";
         public String qDay = ""; public final List<Quest> qList = new ArrayList<>();
         public String diff = "normal";
         public int gfx = 2;
@@ -57,8 +57,6 @@ public final class G {
         public final Map<String, Integer> swUp = new LinkedHashMap<>();
         public int swBest, swBestz, swCam;
         public boolean swInv;
-        // дуэль
-        public String duelName = "";
         // операторы
         public final List<String> opOwn = new ArrayList<>();
         public String opSel = "", opFree = "";
@@ -86,18 +84,37 @@ public final class G {
         s.skOwn.add("olive"); s.skOwn.add("gold");
         s.swOwn.add("osa");
         for (String k : new String[]{"war", "bat", "hull", "ecm"}) s.swUp.put(k, 0);
-        if (Gdx.app != null && Gdx.app.getType() == com.badlogic.gdx.Application.ApplicationType.Android) s.gfx = 1;
+        if (Gdx.app != null && Gdx.app.getType() == ApplicationType.Android) s.gfx = 1;
         return s;
     }
 
     static FileHandle saveFile() { return Gdx.files.local("save3d.json"); }
 
+    /** Копия последнего удачного сохранения: если основной файл побьётся (телефон выключился во время записи), прогресс берётся отсюда. */
+    static FileHandle backupFile() { return Gdx.files.local("save3d.bak.json"); }
+
+    static FileHandle tmpFile() { return Gdx.files.local("save3d.tmp"); }
+
+    /** Основной файл прочитан без ошибок — его можно копировать в резерв. */
+    static boolean mainOk;
+
     public static void loadSave() {
+        FileHandle main = saveFile(), bak = backupFile();
+        mainOk = main.exists() && readSave(main);
+        if (mainOk) return;
+        if (bak.exists() && readSave(bak)) {
+            BlackBox.log("сохранение повреждено — взята резервная копия");
+            return;
+        }
+        SV = defSave();
+    }
+
+    /** Прочитать сохранение в SV. false — файл битый, SV остаётся «чистым». */
+    static boolean readSave(FileHandle f) {
         SV = defSave();
         try {
-            FileHandle f = saveFile();
-            if (!f.exists()) return;
             JsonValue d = new JsonReader().parse(f.readString("UTF-8"));
+            if (d == null || !d.isObject()) return false;
             Save s = SV;
             s.c = d.getInt("c", 0); s.best = d.getInt("best", 0); s.xp = d.getInt("xp", 0);
             JsonValue upv = d.get("upv");
@@ -123,7 +140,6 @@ public final class G {
             readIntMap(d.get("chal"), s.chal);
             JsonValue dl = d.get("daily");
             if (dl != null) { s.dailyLast = dl.getString("last", ""); s.dailyStreak = dl.getInt("streak", 0); }
-            s.dmis = d.getString("dmis", "");
             JsonValue q = d.get("q");
             if (q != null) {
                 s.qDay = q.getString("day", "");
@@ -158,7 +174,6 @@ public final class G {
                 if (u != null) for (JsonValue v = u.child; v != null; v = v.next) s.swUp.put(v.name, v.asInt());
                 s.swBest = sw.getInt("best", 0); s.swBestz = sw.getInt("bestz", 0); s.swCam = sw.getInt("cam", 0); s.swInv = sw.getBoolean("inv", false);
             }
-            s.duelName = d.getString("duelName", "");
             JsonValue op = d.get("op");
             if (op != null) {
                 readList(op.get("own"), s.opOwn, true);
@@ -168,9 +183,11 @@ public final class G {
                 s.opPity = op.getInt("pity", 0); s.opCases = op.getInt("cases", 0);
                 if (!s.opOwn.contains(s.opSel)) s.opSel = "";
             }
+            return true;
         } catch (Throwable t) {
-            Gdx.app.error("save", "bad save", t);
+            Gdx.app.error("save", "bad save " + f.name(), t);
             SV = defSave();
+            return false;
         }
     }
 
@@ -213,7 +230,6 @@ public final class G {
             w.array("ach"); for (String v : s.ach) w.value(v); w.pop();
             w.object("chal"); for (Map.Entry<String, Integer> e : s.chal.entrySet()) w.set(e.getKey(), e.getValue()); w.pop();
             w.object("daily").set("last", s.dailyLast).set("streak", s.dailyStreak).pop();
-            w.set("dmis", s.dmis);
             w.object("q").set("day", s.qDay);
             w.array("list");
             for (Quest q : s.qList) {
@@ -227,7 +243,6 @@ public final class G {
             w.object("up"); for (Map.Entry<String, Integer> e : s.swUp.entrySet()) w.set(e.getKey(), e.getValue()); w.pop();
             w.set("best", s.swBest).set("bestz", s.swBestz).set("cam", s.swCam).set("inv", s.swInv);
             w.pop();
-            w.set("duelName", s.duelName);
             w.object("op");
             w.array("own"); for (String v : s.opOwn) w.value(v); w.pop();
             w.array("alt"); for (String v : s.opAlt) w.value(v); w.pop();
@@ -239,7 +254,12 @@ public final class G {
             w.pop();
             w.pop();
             w.close();
-            saveFile().writeString(sw.toString(), false, "UTF-8");
+            // сначала во временный файл, потом подмена: оборванная запись не испортит сохранение
+            FileHandle tmp = tmpFile(), main = saveFile();
+            tmp.writeString(sw.toString(), false, "UTF-8");
+            if (mainOk && main.exists()) main.copyTo(backupFile());
+            tmp.moveTo(main);
+            mainOk = true;
         } catch (Throwable t) {
             Gdx.app.error("save", "save failed", t);
         }
@@ -283,7 +303,7 @@ public final class G {
     private static long hapT;
 
     public static void hap(int ms) {
-        if (!SV.vib || Gdx.app.getType() != com.badlogic.gdx.Application.ApplicationType.Android) return;
+        if (!SV.vib || Gdx.app.getType() != ApplicationType.Android) return;
         long now = System.currentTimeMillis();
         if (now - hapT < 150) return;
         hapT = now;
@@ -298,14 +318,6 @@ public final class G {
     public static void sfxP(String name, float vol, float pitch, int gapMs) { if (sfx != null) sfx.playP(name, vol, pitch, gapMs); }
 
     // ---------- утилиты данных ----------
-    public static JsonValue d(String... path) {
-        JsonValue v = D;
-        for (String p : path) { if (v == null) return null; v = v.get(p); }
-        return v;
-    }
-
-    public static String str(JsonValue v, String k, String def) { return v == null ? def : v.getString(k, def); }
-
     public static Color hex(String s) {
         if (s.startsWith("#")) s = s.substring(1);
         if (s.length() == 6) s = s + "ff";
@@ -318,7 +330,7 @@ public final class G {
     }
 
     public static boolean isMobile() {
-        return Gdx.app.getType() == com.badlogic.gdx.Application.ApplicationType.Android || Gdx.app.getType() == com.badlogic.gdx.Application.ApplicationType.iOS;
+        return Gdx.app.getType() == ApplicationType.Android || Gdx.app.getType() == ApplicationType.iOS;
     }
 
     public static String vehName(String k) {

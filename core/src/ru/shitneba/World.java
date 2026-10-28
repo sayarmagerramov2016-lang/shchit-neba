@@ -8,6 +8,7 @@ import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.FloatArray;
+import com.badlogic.gdx.utils.IntArray;
 import com.badlogic.gdx.utils.JsonValue;
 
 import java.util.HashMap;
@@ -68,7 +69,6 @@ public class World {
     final Color cloudTint = new Color();
     public final Color smokeTint = new Color(0.84f, 0.83f, 0.81f, 1);
     public final Dyn cloudDyn, rainDyn, boltDyn;
-    Mat starMat;
     float[] precip;
 
     public World(Renderer r) {
@@ -188,7 +188,7 @@ public class World {
     }
 
     /** Для автотеста: молния прямо сейчас. */
-    public void debugBolt(Vector3 cp) { lightning = 0.001f; }
+    public void debugBolt() { lightning = 0.001f; }
 
     void drawBolts(float dt, Vector3 cp) {
         boltDyn.clear();
@@ -261,6 +261,7 @@ public class World {
         if (content != null) { content.remove(); for (Mesh3 m : meshes) m.dispose(); meshes.clear(); }
         content = new Node3();
         root.add(content);
+        MB.hq = false; // местность без скруглённых рёбер — одинаково при первом и всех следующих построениях
         map = nextMap; nextMap = "valley";
         Maps.prepare(map);
         JsonValue T = G.D.get("THEMES").get(Math.min(theme, G.D.get("THEMES").size - 1));
@@ -320,7 +321,7 @@ public class World {
         if (!Gr[4].isEmpty()) buildTrees(Gr, gfx);
         if (!Gr[5].isEmpty() && gfx >= 1) buildGrass(Gr, gfx);
         buildRocks(Gr);
-        buildMountains(T, Gr, gfx);
+        buildMountains(Gr, gfx);
         buildExtras(T);
         new Maps(this).build();
         buildClouds(T);
@@ -379,7 +380,7 @@ public class World {
                 k++;
             }
         }
-        com.badlogic.gdx.utils.IntArray idx = new com.badlogic.gdx.utils.IntArray();
+        IntArray idx = new IntArray();
         for (int i = 0; i < AS; i++) idx.addAll(0, 1 + (i + 1) % AS, 1 + i);
         for (int j = 1; j < RS; j++) for (int i = 0; i < AS; i++) {
             int A = 1 + (j - 1) * AS + i, B = 1 + (j - 1) * AS + (i + 1) % AS, C = A + AS, D = B + AS;
@@ -394,7 +395,7 @@ public class World {
     }
 
     /** Индексированная сетка → неиндексированный меш с гладкими нормалями (generate_normals). up=true: нормали вверх. */
-    Mesh3 indexedMesh(float[] p, float[] col, float[] uv, com.badlogic.gdx.utils.IntArray idx, boolean faceUp) {
+    Mesh3 indexedMesh(float[] p, float[] col, float[] uv, IntArray idx, boolean faceUp) {
         int nv = p.length / 3;
         float[] nrm = new float[nv * 3];
         for (int t = 0; t < idx.size; t += 3) {
@@ -598,7 +599,7 @@ public class World {
         add(b.mesh(), m);
     }
 
-    void buildMountains(JsonValue T, String[] Gr, int gfx) {
+    void buildMountains(String[] Gr, int gfx) {
         int SEG = gfx >= 1 ? 180 : 120, RAD = 16;
         float r0 = 1250f, r1 = 2700f;
         Color cM = c(Gr[3]), cS = night ? c("8c96aa") : c("f2f5fa"), cL = c(Gr[1]);
@@ -629,7 +630,7 @@ public class World {
                 k++;
             }
         }
-        com.badlogic.gdx.utils.IntArray idx = new com.badlogic.gdx.utils.IntArray();
+        IntArray idx = new IntArray();
         for (int i = 0; i < SEG; i++) for (int j = 0; j < RAD; j++) {
             int A = i * (RAD + 1) + j, B = A + RAD + 1;
             idx.addAll(A, A + 1, B, B, A + 1, B + 1);

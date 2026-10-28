@@ -22,8 +22,6 @@ public class Node3 {
     public float alpha = 1f;
     /** пользовательское поле (тег) */
     public Object tag;
-    /** вызывается перед отрисовкой (для эмиттеров и т.п.) */
-    public Runnable onUpdate;
 
     static final Matrix4 tmp = new Matrix4();
     static final Quaternion q = new Quaternion();
@@ -109,18 +107,6 @@ public class Node3 {
 
     /** точка из локальных координат этого узла в мировые (по текущей global) */
     public Vector3 toGlobal(Vector3 local, Vector3 out) { return out.set(local).mul(global); }
-
-    /** Пересчитать global цепочкой предков (если нужно вне кадра). */
-    public void refresh() {
-        Array<Node3> chain = new Array<>();
-        for (Node3 n = this; n != null; n = n.parent) chain.add(n);
-        Matrix4 m = null;
-        for (int i = chain.size - 1; i >= 0; i--) {
-            Node3 n = chain.get(i);
-            if (m == null) n.local(n.global); else { n.local(tmp); n.global.set(m).mul(tmp); }
-            m = n.global;
-        }
-    }
 
     public interface Visitor { void visit(Node3 n); }
 

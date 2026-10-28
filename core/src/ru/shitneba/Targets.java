@@ -27,7 +27,7 @@ public final class Targets {
 
     // общая палитра
     static final Color CONC = c("8e8b82"), CONC_D = c("6f6c64"), DIRT = c("6d5f45"), DIRT_D = c("564a35");
-    static final Color OLV = c("4d5a35"), OLV_D = c("3a4428"), OLV_L = c("66734a"), KHAKI = c("7a7556");
+    static final Color OLV = c("4d5a35"), OLV_D = c("3a4428");
     static final Color STEEL = c("6b7075"), DSTEEL = c("3e4245"), RUST = c("7a4a2e"), TIRE = c("1c1c1c"), BLK = c("161616");
     static final Color WOOD = c("8a6a44"), WOOD_D = c("6b5132"), SAND = c("a8966a"), SAND_D = c("8c7a52");
     static final Color RED = c("b02a20"), WHITE = c("e6e4dc"), YEL = c("d8a820"), GLASS = c("1a2633");
@@ -796,7 +796,7 @@ public final class Targets {
             b.box(5.6f, 0.5f, 3.6f, CONC_D, x, 0.45f, z);
             b.box(3.6f, 3.0f, 2.6f, tr, x, 2.2f, z);
             b.box(3.8f, 0.2f, 2.8f, new Color(tr).mul(0.85f, 0.85f, 0.85f, 1), x, 3.75f, z);
-            for (float s : S2) for (int f = 0; f < 7; f++) m.box(0.06f, 2.4f, 0.9f, DSTEEL, x + s * (1.9f + f * 0.0f) + s * f * 0.0f, 2.1f, z - 1.35f + f * 0.45f);
+            for (float s : S2) for (int f = 0; f < 7; f++) m.box(0.06f, 2.4f, 0.9f, DSTEEL, x + s * 1.9f, 2.1f, z - 1.35f + f * 0.45f);
             for (float s : S2) b.box(0.6f, 2.5f, 2.9f, new Color(tr).mul(0.9f, 0.9f, 0.9f, 1), x + s * 2.25f, 2.1f, z);
             // расширительный бак, газовое реле, вводы ВН из «тарелочек»
             b.cyl(0.45f, 0.45f, 2.6f, 14, tr, x, 4.6f, z + 1.0f, 0, 0, PI / 2);

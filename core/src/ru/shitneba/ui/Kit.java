@@ -8,6 +8,8 @@ import com.badlogic.gdx.utils.Disposable;
 import java.util.HashMap;
 import java.util.Map;
 
+import ru.shitneba.BlackBox;
+
 /**
  * UI-кит главного меню (нарисован в SpriteCook, приглушён store/tools/tone_ui.py).
  * Картинки лежат в assets/ui/menu. Грузятся при первом обращении.
@@ -35,7 +37,7 @@ public class Kit implements Disposable {
                 t = new Texture(Gdx.files.internal("ui/menu/" + name + ".png"), true);
                 t.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);
             } catch (Exception e) {
-                ru.shitneba.BlackBox.mark("нет картинки ui/menu/" + name);
+                BlackBox.mark("нет картинки ui/menu/" + name);
                 t = d.white;
             }
             tx.put(name, t);

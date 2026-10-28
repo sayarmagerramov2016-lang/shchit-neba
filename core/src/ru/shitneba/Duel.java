@@ -1,12 +1,14 @@
 package ru.shitneba;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.JsonValue;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -24,9 +26,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -44,7 +49,7 @@ public class Duel {
 
     public static Platform platform;
 
-    static final byte M_LOBBY = 1, M_PICK = 2, M_START = 3, M_IN_BOSS = 4, M_IN_PVO = 5, M_SNAP = 6, M_END = 7, M_BYE = 8;
+    static final byte M_LOBBY = 1, M_PICK = 2, M_START = 3, M_IN_BOSS = 4, M_IN_PVO = 5, M_SNAP = 6, M_END = 7;
 
     final Game game;
     public GameUI ui;
@@ -53,7 +58,6 @@ public class Duel {
     public boolean theirReady, inBattle;
     public String hostName = "";
     public final Map<String, String[]> found = Collections.synchronizedMap(new LinkedHashMap<>()); // ip -> name, role, pick, time
-    public String status = "";
 
     ServerSocket server;
     public boolean hosting() { return server != null; }
@@ -79,7 +83,7 @@ public class Duel {
     static String[] types() {
         if (TYPES == null) {
             List<String> l = new ArrayList<>();
-            for (com.badlogic.gdx.utils.JsonValue v = G.D.get("DT").child; v != null; v = v.next) l.add(v.name);
+            for (JsonValue v = G.D.get("DT").child; v != null; v = v.next) l.add(v.name);
             Collections.sort(l);
             TYPES = l.toArray(new String[0]);
         }
@@ -256,7 +260,7 @@ public class Duel {
                 } catch (IOException ignored) { }
                 long now = System.currentTimeMillis();
                 synchronized (found) {
-                    for (java.util.Iterator<String[]> it = found.values().iterator(); it.hasNext(); ) if (now - Long.parseLong(it.next()[3]) > 4000) it.remove();
+                    for (Iterator<String[]> it = found.values().iterator(); it.hasNext(); ) if (now - Long.parseLong(it.next()[3]) > 4000) it.remove();
                 }
             }
         }, "duel-disc");
@@ -341,7 +345,7 @@ public class Duel {
         while ((r = mainQ.poll()) != null) r.run();
         byte[] m;
         while ((m = recvQ.poll()) != null) {
-            try { handle(new DataInputStream(new java.io.ByteArrayInputStream(m))); }
+            try { handle(new DataInputStream(new ByteArrayInputStream(m))); }
             catch (Throwable t) { Gdx.app.error("duel", "bad msg", t); }
         }
         if (!inBattle || out == null) return;
@@ -479,7 +483,7 @@ public class Duel {
         }
         g.syncNoses();
         int ne = in.readShort();
-        java.util.Set<Integer> seen = new java.util.HashSet<>();
+        Set<Integer> seen = new HashSet<>();
         String[] ty = types();
         for (int j = 0; j < ne; j++) {
             int id = in.readInt(); int ti = in.readShort();
@@ -507,7 +511,7 @@ public class Duel {
                 Vector3 v = new Vector3(in.readFloat(), in.readFloat(), in.readFloat());
                 m.visible = true; m.pos.set(p);
                 if (v.len() > 1) { v.nor(); m.lookDir(v, Math.abs(v.y) < 0.98f ? Vector3.Y : Vector3.X); }
-                if (MathUtils.random() < 0.6f) FX.puff(p, 0.9f, new com.badlogic.gdx.graphics.Color(0.8f, 0.8f, 0.78f, 1), 0.45f, 1.2f, 0.5f);
+                if (MathUtils.random() < 0.6f) FX.puff(p, 0.9f, TRAIL_C, 0.45f, 1.2f, 0.5f);
             } else m.visible = false;
         }
         int nev = in.readShort();
@@ -519,6 +523,8 @@ public class Duel {
             playEvent(k, a);
         }
     }
+
+    static final Color TRAIL_C = new Color(0.8f, 0.8f, 0.78f, 1);
 
     float f(Object o) { return o instanceof Float ? (Float) o : 0f; }
 

@@ -16,13 +16,15 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import ru.shitneba.BlackBox;
+import ru.shitneba.Duel;
 import ru.shitneba.G;
 import ru.shitneba.Game;
 import ru.shitneba.GameUI;
+import ru.shitneba.Strike;
 import ru.shitneba.gfx.Tex;
 
 /** Интерфейс: меню-«тактический терминал», панели и боевой HUD. */
@@ -53,8 +55,8 @@ public class UI implements GameUI, InputProcessor {
     final Draw d;
     final Host host;
     public String panel = "menu";
-    public ru.shitneba.Strike strike;
-    public ru.shitneba.Duel duel;
+    public Strike strike;
+    public Duel duel;
     float panelT, T;
     final Map<String, String> backTo = new HashMap<>();
     final Map<String, Float> panelH = new HashMap<>();
@@ -129,7 +131,7 @@ public class UI implements GameUI, InputProcessor {
 
     // ================= панели =================
     public void show(String name) {
-        if (!name.equals(panel)) { panelT = 0; scroll = 0; ru.shitneba.BlackBox.log("экран «" + name + "»"); }
+        if (!name.equals(panel)) { panelT = 0; scroll = 0; BlackBox.log("экран «" + name + "»"); }
         panel = name;
         tapReady = false;
         if (name.equals("menu")) g.ensureQuests();
@@ -234,9 +236,9 @@ public class UI implements GameUI, InputProcessor {
             d.end();
             if (pendingFrames-- <= 0) {
                 Runnable r = pending; pending = null;
-                ru.shitneba.BlackBox.hold = true;
-                ru.shitneba.BlackBox.mark("загрузка");
-                try { r.run(); } finally { ru.shitneba.BlackBox.tick(); ru.shitneba.BlackBox.hold = false; }
+                BlackBox.hold = true;
+                BlackBox.mark("загрузка");
+                try { r.run(); } finally { BlackBox.tick(); BlackBox.hold = false; }
             }
             return;
         }
@@ -305,14 +307,15 @@ public class UI implements GameUI, InputProcessor {
     }
 
     // ---------- фон и коробки ----------
+    static final Color C_GRID = new Color(0.1f, 0.55f, 0.45f, 1), C_DIM = new Color(0f, 0.012f, 0.014f, 1);
+
     void grid(float a) {
-        Color gc = new Color(0.1f, 0.55f, 0.45f, 1);
-        for (float x = 0; x < d.w; x += 32) d.rect(x, 0, 1, d.h, gc, a);
-        for (float y = 0; y < d.h; y += 32) d.rect(0, y, d.w, 1, gc, a);
+        for (float x = 0; x < d.w; x += 32) d.rect(x, 0, 1, d.h, C_GRID, a);
+        for (float y = 0; y < d.h; y += 32) d.rect(0, y, d.w, 1, C_GRID, a);
     }
 
     void dimBg() {
-        d.rect(0, 0, d.w, d.h, new Color(0f, 0.012f, 0.014f, 1), 0.62f);
+        d.rect(0, 0, d.w, d.h, C_DIM, 0.62f);
         grid(0.05f);
         float e = d.w * 0.18f;
         d.gradH(0, 0, e, d.h, BLACK, 0.35f, BLACK, 0);
@@ -561,7 +564,6 @@ public class UI implements GameUI, InputProcessor {
         if (c.lv >= 0) {
             float pw = Math.min(16, (w - 24 - (c.max - 1) * 3) / Math.max(1, c.max));
             for (int i = 0; i < c.max; i++) d.rect(x + 12 + i * (pw + 3), yy + 2, pw, 6, i < c.lv ? C_ACC : WHITE, i < c.lv ? 1 : 0.12f);
-            yy += 14;
         }
         if (button(x + 12, y + h - 12 - 34, w - 24, 34, c.btn, BUY, c.en, 14) && c.act != null) c.act.run();
     }
@@ -897,7 +899,10 @@ public class UI implements GameUI, InputProcessor {
             cy += 24;
             section("Улучшения · " + G.vehName(V));
             List<Card> cs = new ArrayList<>();
-            for (JsonValue kv = G.D.get("UPG_SET").get(V).child; kv != null; kv = kv.next) {
+            // в миссиях «без улучшений» прокачка не действует — не даём зря тратить монеты
+            boolean noUpg = inRun && g.hasMod("noUpg");
+            if (noUpg) label("В этой миссии улучшения отключены — покупка здесь ничего не даст.", 13, C_MUT, Draw.MAIN, 0);
+            for (JsonValue kv = G.D.get("UPG_SET").get(V).child; kv != null && !noUpg; kv = kv.next) {
                 final String k = kv.asString();
                 JsonValue u = G.D.get("UPG").get(k);
                 Integer lvI = up.get(k);
@@ -1088,7 +1093,7 @@ public class UI implements GameUI, InputProcessor {
     void pAbout() {
         frame("about", 640, false, true, () -> {
             title("Об игре");
-            label("Щит неба 3D · версия " + G.VER + " · 6+", 16, C_TXT, Draw.TITLE, -1);
+            label("Щит неба 3D · версия " + G.VER + " · 12+", 16, C_TXT, Draw.TITLE, -1);
             label("Аркада про противовоздушную оборону. Все организации, персонажи, искусственные интеллекты и боевые машины вымышлены.", 14, C_TXT);
             label("Конфиденциальность: игра не собирает и не передаёт персональные данные. Прогресс хранится только на устройстве.", 14, C_TXT);
             label("Движок libGDX (лицензия Apache 2.0). Шрифты Russo One и Exo 2 — SIL Open Font License 1.1.", 14, C_MUT);
@@ -2081,14 +2086,14 @@ public class UI implements GameUI, InputProcessor {
             label("Учения «Обратная сторона»: ты — красная команда. Веди дрон через зону ПВО и уничтожь все цели рубежа. Лети низко — радары видят хуже, прячься за холмами, сбивай ракеты ловушками. На старте 8 дронов, за каждый прорванный рубеж — ещё 4–7. Кончились дроны — конец забега.", 13, C_MUT, Draw.MAIN, 0);
             d.text(String.format("Рекорд: %d очков · лучший рубеж: %d · монеты: %d", G.SV.swBest, G.SV.swBestz, G.SV.c), cx + cw / 2, cy + 14, 14, C_ACC, Draw.BOLD, 0);
             cy += 24;
-            String pick = ru.shitneba.Strike.DRONES.containsKey(G.SV.swPick) ? G.SV.swPick : "osa";
-            if (btn("Взлёт · " + ru.shitneba.Strike.DRONES.get(pick).name, 52, BIG, true)) {
+            String pick = Strike.DRONES.containsKey(G.SV.swPick) ? G.SV.swPick : "osa";
+            if (btn("Взлёт · " + Strike.DRONES.get(pick).name, 52, BIG, true)) {
                 pending = () -> { show(""); if (strikeHost != null) strikeHost.startStrike(); };
                 pendingFrames = 1;
             }
             section("Дроны");
             List<Card> cs = new ArrayList<>();
-            for (final ru.shitneba.Strike.DroneDef dd : ru.shitneba.Strike.DRONES.values()) {
+            for (final Strike.DroneDef dd : Strike.DRONES.values()) {
                 boolean own = G.SV.swOwn.contains(dd.key), sel = pick.equals(dd.key);
                 Card c = card(dd.name, dd.desc, own ? (sel ? "Выбран" : "Выбрать") : "Купить · " + dd.price, (own && !sel) || (!own && G.SV.c >= dd.price), () -> {
                     if (!G.SV.swOwn.contains(dd.key)) { G.SV.c -= dd.price; G.SV.swOwn.add(dd.key); G.sfx("coin"); }
@@ -2102,10 +2107,10 @@ public class UI implements GameUI, InputProcessor {
             cards(cs, 4);
             section("Улучшения (для всех дронов)");
             cs.clear();
-            for (final String[] u : ru.shitneba.Strike.UPS) {
-                final int l = ru.shitneba.Strike.up(u[0]);
+            for (final String[] u : Strike.UPS) {
+                final int l = Strike.up(u[0]);
                 boolean mx = l >= 5;
-                final int cost = mx ? 0 : ru.shitneba.Strike.UP_COST[l];
+                final int cost = mx ? 0 : Strike.UP_COST[l];
                 Card c = card(u[1], u[2], mx ? "Максимум" : "Улучшить · " + cost, !mx && G.SV.c >= cost, () -> {
                     G.SV.c -= cost; G.SV.swUp.put(u[0], l + 1); G.sfx("coin"); G.save();
                 });
@@ -2122,7 +2127,7 @@ public class UI implements GameUI, InputProcessor {
     }
 
     void pSPause() {
-        final ru.shitneba.Strike S = strike;
+        final Strike S = strike;
         frame("spause", 400, false, true, () -> {
             title("Пауза");
             if (btn("Продолжить", 50, BIG, true)) { S.resume(); show(""); }
@@ -2133,7 +2138,7 @@ public class UI implements GameUI, InputProcessor {
     }
 
     void pSOver() {
-        final ru.shitneba.Strike S = strike;
+        final Strike S = strike;
         frame("sover", 500, false, true, () -> {
             title("Рой рассеян");
             if (S.resRec) { d.text("НОВЫЙ РЕКОРД!", cx + cw / 2, cy + 18, 20, C_ACC, Draw.WIDE, 0); cy += 30; }
@@ -2205,35 +2210,35 @@ public class UI implements GameUI, InputProcessor {
     final Array<Vector3> tmpArr = new Array<>();
 
     void drawStrikeHud() {
-        ru.shitneba.Strike S = strike;
-        ru.shitneba.Strike.DroneState D = S.D;
+        Strike S = strike;
+        Strike.DroneState D = S.D;
         float W = sx(), H = sy();
         Color AMB = C_ACC, TEAL = C_TEAL;
         boolean fpv = S.camMode == 0 && S.st.equals("fly");
-        ru.shitneba.Strike.Obj near = null; float nd = 1e9f;
-        for (ru.shitneba.Strike.Obj t : S.targets) if (t.alive && D.alive && t.pos.dst(D.pos) < nd) { nd = t.pos.dst(D.pos); near = t; }
-        for (ru.shitneba.Strike.Obj t : S.targets) {
+        Strike.Obj near = null; float nd = 1e9f;
+        for (Strike.Obj t : S.targets) if (t.alive && D.alive && t.pos.dst(D.pos) < nd) { nd = t.pos.dst(D.pos); near = t; }
+        for (Strike.Obj t : S.targets) {
             if (!t.alive) continue;
             tv2.set(t.pos).add(0, t.hr + 4, 0);
             float dist = D.alive ? t.pos.dst(D.pos) : 0;
             if (proj(tv2, sp) && onScreen(sp)) {
                 float r = 11;
                 d.polyline(new float[]{sp.x, sp.y - r, sp.x + r, sp.y, sp.x, sp.y + r, sp.x - r, sp.y}, true, 2, AMB, 1);
-                String nm = ru.shitneba.Strike.tgName(t.kind);
+                String nm = Strike.tgName(t.kind);
                 if (t == near) osd(nm + " · " + (int) dist + " м", sp.x, sp.y - 16, 13, AMB, 0, true);
                 else if (!D.alive || dist < 200) osd(nm, sp.x, sp.y - 16, 11, new Color(AMB.r, AMB.g, AMB.b, 0.8f), 0, true);
                 float k = t.hp / Math.max(1, t.max);
                 if (k < 1) { d.rect(sp.x - 20, sp.y + 15, 40, 4, BLACK, 0.5f); d.rect(sp.x - 20, sp.y + 15, 40 * k, 4, AMB, 1); }
             }
         }
-        for (ru.shitneba.Strike.Obj u : S.units) {
+        for (Strike.Obj u : S.units) {
             if (!u.alive || !u.known) continue;
             if (!proj(tv2.set(u.pos).add(0, 6.5f, 0), sp) || !onScreen(sp)) continue;
             Color col = u.track > 0.3f ? C_SRED : new Color(1, 0.55f, 0.45f, 0.75f);
             d.polyline(new float[]{sp.x, sp.y - 9, sp.x + 9, sp.y + 7, sp.x - 9, sp.y + 7}, true, 2, col, col.a);
             if (D.alive && (u.track > 0.3f || u.pos.dst(D.pos) < 200)) osd(G.vehName(u.kind), sp.x, sp.y - 13, 11, col, 0, true);
         }
-        for (ru.shitneba.Strike.Hunter h : S.hunters) {
+        for (Strike.Hunter h : S.hunters) {
             if (!h.alive) continue;
             if (proj(h.pos, sp) && onScreen(sp)) d.ring(sp.x, sp.y, 8, 2, h.chase ? C_SRED : new Color(1, 0.6f, 0.5f, 1), h.chase ? 1 : 0.6f);
         }
@@ -2243,7 +2248,7 @@ public class UI implements GameUI, InputProcessor {
                 else edgeArrow(m, C_SRED, "РАКЕТА " + (int) m.dst(D.pos) + " м");
             }
             if (near != null) {
-                if (!proj(tv2.set(near.pos).add(0, near.hr, 0), sp) || !onScreen(sp)) edgeArrow(near.pos, AMB, ru.shitneba.Strike.tgName(near.kind) + " " + (int) nd + " м");
+                if (!proj(tv2.set(near.pos).add(0, near.hr, 0), sp) || !onScreen(sp)) edgeArrow(near.pos, AMB, Strike.tgName(near.kind) + " " + (int) nd + " м");
             }
         }
         float cxx = W / 2, cyy = H / 2;
@@ -2297,7 +2302,7 @@ public class UI implements GameUI, InputProcessor {
         osd(S.camMode == 0 ? "FPV" : "3-Е ЛИЦО", cr[0] + cr[2] / 2, cr[1] + cr[3] / 2 + 5, 12, C_OSD, 0, true);
         minimap(W - 80, 82, 64);
         float fy = 166;
-        for (ru.shitneba.Strike.Feed f : S.feed) {
+        for (Strike.Feed f : S.feed) {
             float a = MathUtils.clamp(f.life, 0, 1);
             osd(f.t, W - 14, fy, 13, new Color(f.c.r, f.c.g, f.c.b, a), 1, false);
             fy += 18;
@@ -2333,24 +2338,24 @@ public class UI implements GameUI, InputProcessor {
     }
 
     void minimap(float cx0, float cy0, float R) {
-        ru.shitneba.Strike S = strike;
+        Strike S = strike;
         d.circle(cx0, cy0, R, new Color(0, 0.05f, 0.05f, 1), 0.55f);
         d.ring(cx0, cy0, R, 1.5f, C_TEAL, 0.6f);
         Vector3 me = S.D.pos;
         float yaw = S.D.yaw, scale = R / 420f;
         float cs = MathUtils.cos(yaw), sn = MathUtils.sin(yaw);
-        for (ru.shitneba.Strike.Obj u : S.units) {
+        for (Strike.Obj u : S.units) {
             if (!u.alive) continue;
             float[] m = mapPt(u.pos, me, cs, sn, scale, R, cx0, cy0);
             float det = S.detRange(u) * scale;
             if (Vector2.dst(m[0], m[1], cx0, cy0) + det < R) d.ring(m[0], m[1], det, 1, new Color(1, 0.3f, 0.2f, 1), 0.18f);
             d.rect(m[0] - 3, m[1] - 3, 6, 6, u.track > 0.3f ? C_SRED : new Color(1, 0.5f, 0.4f, 1), u.track > 0.3f ? 1 : 0.8f);
         }
-        for (ru.shitneba.Strike.Obj t : S.targets) if (t.alive) {
+        for (Strike.Obj t : S.targets) if (t.alive) {
             float[] m = mapPt(t.pos, me, cs, sn, scale, R, cx0, cy0);
             d.poly(new float[]{m[0], m[1] - 5, m[0] + 5, m[1], m[0], m[1] + 5, m[0] - 5, m[1]}, C_ACC, 1);
         }
-        for (ru.shitneba.Strike.Hunter h : S.hunters) if (h.alive) { float[] m = mapPt(h.pos, me, cs, sn, scale, R, cx0, cy0); d.circle(m[0], m[1], 2.5f, C_SRED, 1); }
+        for (Strike.Hunter h : S.hunters) if (h.alive) { float[] m = mapPt(h.pos, me, cs, sn, scale, R, cx0, cy0); d.circle(m[0], m[1], 2.5f, C_SRED, 1); }
         for (Vector3 p : S.allMissiles(tmpArr)) { float[] m = mapPt(p, me, cs, sn, scale, R, cx0, cy0); d.circle(m[0], m[1], 2, WHITE, 1); }
         d.poly(new float[]{cx0, cy0 - 7, cx0 + 5, cy0 + 5, cx0 - 5, cy0 + 5}, C_TEAL, 1);
     }
@@ -2372,7 +2377,7 @@ public class UI implements GameUI, InputProcessor {
     }
 
     void strikeKeys() {
-        ru.shitneba.Strike S = strike;
+        Strike S = strike;
         float x = 0, y = 0;
         if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT)) x -= 1;
         if (Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.RIGHT)) x += 1;
@@ -2388,7 +2393,7 @@ public class UI implements GameUI, InputProcessor {
     }
 
     boolean strikeTouchDown(float x, float y, int ptr, int button) {
-        ru.shitneba.Strike S = strike;
+        Strike S = strike;
         if (DESK) {
             if (!Gdx.input.isCursorCatched()) {
                 if (button == Input.Buttons.LEFT) {
@@ -2406,7 +2411,7 @@ public class UI implements GameUI, InputProcessor {
         else if (dst(x, y, sDet()) < 42) { w = "ui"; S.detonateNow(); }
         else if (!S.S.wing && dst(x, y, sBrake()) < 42) w = "brake";
         else if (S.S.bombs > 0 && dst(x, y, sBomb()) < 44) { w = "ui"; S.dropBomb(); }
-        else if (in(x, y, PAUSE_R[0], PAUSE_R[1], PAUSE_R[2], PAUSE_R[3])) { w = "ui"; strikePause(); return true; }
+        else if (in(x, y, PAUSE_R[0], PAUSE_R[1], PAUSE_R[2], PAUSE_R[3])) { strikePause(); return true; }
         else { float[] c = sCam(); if (in(x, y, c[0] - 8, c[1] - 8, c[2] + 16, c[3] + 16)) { w = "ui"; S.toggleCam(); }
                else if (x < sx() * 0.45f && joyId < 0) { w = "joy"; joyId = ptr; joyO.set(x, y); joyP.set(x, y); } }
         touches.put(ptr, w);
@@ -2417,7 +2422,7 @@ public class UI implements GameUI, InputProcessor {
     static float dst(float x, float y, float[] c) { return Vector2.dst(x, y, c[0], c[1]); }
 
     boolean strikeDrag(float x, float y, int ptr) {
-        ru.shitneba.Strike S = strike;
+        Strike S = strike;
         String w = touches.get(ptr);
         Vector2 lt = lastTouch.get(ptr);
         if ("joy".equals(w)) {
@@ -2442,7 +2447,7 @@ public class UI implements GameUI, InputProcessor {
     }
 
     boolean strikeKey(int kc) {
-        ru.shitneba.Strike S = strike;
+        Strike S = strike;
         switch (kc) {
             case Input.Keys.SPACE: case Input.Keys.F: S.useFlares(); return true;
             case Input.Keys.E: case Input.Keys.B: S.dropBomb(); return true;
@@ -2477,7 +2482,7 @@ public class UI implements GameUI, InputProcessor {
     }
 
     String pickGrid(String role, String cur) {
-        String[] list = role.equals("boss") ? ru.shitneba.Game.DUEL_BOSSES : ru.shitneba.Duel.VEHS;
+        String[] list = role.equals("boss") ? Game.DUEL_BOSSES : Duel.VEHS;
         int cols = Math.max(2, Math.min(5, (int) (cw / 120)));
         float gp = 6, w = (cw - gp * (cols - 1)) / cols;
         String res = null;
@@ -2487,12 +2492,12 @@ public class UI implements GameUI, InputProcessor {
         }
         cy += ((list.length + cols - 1) / cols) * (38 + gp) + 4;
         if (role.equals("boss") && cur != null && !cur.isEmpty())
-            label("Особое умение: " + ru.shitneba.Game.SPEC_NAME.get(cur), 13, C_TEAL);
+            label("Особое умение: " + Game.SPEC_NAME.get(cur), 13, C_TEAL);
         return res;
     }
 
     void hostWith(String role, String pick) {
-        ru.shitneba.Duel D = duel;
+        Duel D = duel;
         if (!D.hosting() || !D.isHost) {
             String err = D.host(role, pick);
             if (!err.isEmpty()) { toast(err); duelView = "main"; }
@@ -2500,15 +2505,15 @@ public class UI implements GameUI, InputProcessor {
     }
 
     void pDuel() {
-        final ru.shitneba.Duel D = duel;
+        final Duel D = duel;
         frame("duel", 660, false, true, () -> {
-            title("Дуэль по Wi‑Fi");
+            title("Дуэль по Wi-Fi");
             if (duelView.equals("main")) {
-                label("Один игрок — расчёт ПВО, другой — босс. Оба устройства должны быть в одной Wi‑Fi сети. Босс побеждает, если разрушит комплекс. ПВО — если собьёт босса или продержится 3 минуты.", 14, C_MUT, Draw.MAIN, 0);
+                label("Один игрок — расчёт ПВО, другой — босс. Оба устройства должны быть в одной сети Wi-Fi. Босс побеждает, если разрушит комплекс. ПВО — если собьёт босса или продержится 3 минуты.", 14, C_MUT, Draw.MAIN, 0);
                 if (btn("Создать игру", 50, BIG, true)) { duelView = "host"; hostWith("pvo", "pantsir"); }
                 if (btn("Найти игру", 46, NORMAL, true)) { duelView = "join"; D.stop(); D.startDiscovery(); }
             } else if (duelView.equals("host")) {
-                label("Ваш адрес в сети: " + ru.shitneba.Duel.localIp(), 15, C_TEAL, Draw.TITLE, 0);
+                label("Ваш адрес в сети: " + Duel.localIp(), 15, C_TEAL, Draw.TITLE, 0);
                 section("Ваша роль");
                 int r = btnRow(new String[]{"Я — ПВО", "Я — босс"}, new int[]{D.myRole.equals("pvo") ? BIG : NORMAL, D.myRole.equals("boss") ? BIG : NORMAL}, null, 42);
                 if (r == 0 && !D.myRole.equals("pvo")) hostWith("pvo", "pantsir");
@@ -2526,10 +2531,10 @@ public class UI implements GameUI, InputProcessor {
             } else {
                 if (!D.connected) {
                     section("Игры в сети");
-                    java.util.List<java.util.Map.Entry<String, String[]>> list;
+                    List<Map.Entry<String, String[]>> list;
                     synchronized (D.found) { list = new ArrayList<>(D.found.entrySet()); }
                     if (list.isEmpty()) label("Ищем… Если игра не находится, введите адрес, который показан у создателя игры.", 13, C_MUT);
-                    for (java.util.Map.Entry<String, String[]> e : list) {
+                    for (Map.Entry<String, String[]> e : list) {
                         String[] f = e.getValue();
                         String roleTxt = f[1].equals("pvo") ? "он — ПВО, вы — босс" : "он — босс, вы — ПВО";
                         if (btn(f[0] + " · " + roleTxt + " · " + e.getKey(), 42, BUY, true)) { D.join(e.getKey()); toast("Подключаемся к " + e.getKey() + "…"); }
@@ -2749,6 +2754,4 @@ public class UI implements GameUI, InputProcessor {
             default: return false;
         }
     }
-
-    static final LinkedHashMap<String, String> EMPTY = new LinkedHashMap<>();
 }

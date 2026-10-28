@@ -4,7 +4,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
-import com.badlogic.gdx.utils.JsonValue;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -24,7 +23,7 @@ public final class Models {
 
     static Vector3 V(float x, float y, float z) { return new Vector3(x, y, z); }
 
-    static final Color DARK = c("23261f"), TIRE = c("161616"), STEEL = c("5a6064"), GLASS = c("1b2a3a"), WHITE = Color.WHITE, SHADE = c("bfbfbf");
+    static final Color DARK = c("23261f"), TIRE = c("161616"), STEEL = c("5a6064"), GLASS = c("1b2a3a"), WHITE = Color.WHITE;
     static final Color OLIVE_D = c("3b4030"), GUN = c("34383b"), RUBBER = c("1d1d1d");
     static final Color RIVET = c("6a6f68"), MARK = c("e8e4d6"), AMBER = c("ffb020"), HAZ = c("e0b020");
     static final Color GREY = c("4f545b"), DGREY = c("2c2f35"), LGREY = c("c5c9d0");
