@@ -18,6 +18,8 @@ public class Mesh3 implements Disposable {
     public final Mesh mesh;
     public final int count;
     public final Vector3 center = new Vector3();
+    /** Габаритный бокс (половины размеров от center). */
+    public final Vector3 half = new Vector3();
     public float radius;
 
     public Mesh3(float[] v, int floats) {
@@ -31,6 +33,7 @@ public class Mesh3 implements Disposable {
         }
         if (count == 0) { mnx = mny = mnz = mxx = mxy = mxz = 0; }
         center.set((mnx + mxx) / 2, (mny + mxy) / 2, (mnz + mxz) / 2);
+        half.set((mxx - mnx) / 2, (mxy - mny) / 2, (mxz - mnz) / 2);
         float r = 0;
         for (int i = 0; i < floats; i += STRIDE) r = Math.max(r, center.dst2(v[i], v[i + 1], v[i + 2]));
         radius = (float) Math.sqrt(r);

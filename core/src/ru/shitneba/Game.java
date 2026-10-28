@@ -183,13 +183,64 @@ public class Game {
     float opDmgMul() { return (opRadarT > 0 ? 1.3f : 1f) * (opRushT > 0 ? 2f : 1f); }
 
     /** Множитель скорострельности (Перегрузка, Рывок самурая). */
-    public float opRateMul() { return (opOverT > 0 ? 1.6f : 1f) * (opRushT > 0 ? 1.3f : 1f); }
+    public float opRateMul() { return (opOverT > 0 ? 1.6f : 1f) * (opRushT > 0 ? 1.3f : 1f) * (squallT > 0 ? 1.5f : 1f); }
+
+    // ---------- 3.10.0: навыки командира ----------
+    /** «Шквал»: счётчик сбитых и время действия. «Второе дыхание» — раз за бой. */
+    public float squallT; int squallN; boolean secondUsed;
+
+    void skillReset() { squallT = 0; squallN = 0; secondUsed = false; }
+
+    // ---------- 3.10.0: витрина бестиария в меню ----------
+    Models.EnemyModel show3; String show3Type;
+
+    /** Показать модель врага на месте комплекса (null — вернуть комплекс). */
+    public void showcase(String type) {
+        if (type != null && type.equals(show3Type)) return;
+        if (show3 != null) { show3.g.remove(); show3 = null; }
+        show3Type = type;
+        if (vm != null) vm.root.visible = type == null;
+        if (type == null) return;
+        show3 = Models.enemy(type, "");
+        // габариты по сферам мешей (без масштаба корня), затем вписываем в ~11 м
+        float[] b = {1e9f, 1e9f, 1e9f, -1e9f, -1e9f, -1e9f};
+        for (Node3 c : show3.g.kids) bounds(c, 0, 0, 0, b);
+        if (show3.g.mesh != null) bounds(show3.g, -show3.g.pos.x, -show3.g.pos.y, -show3.g.pos.z, b);
+        float s0 = show3.g.scl.x, size = Math.max(b[3] - b[0], Math.max(b[4] - b[1], b[5] - b[2])) * s0;
+        float k = 11f / Math.max(0.5f, size);
+        show3.g.scl.scl(k);
+        float s = s0 * k;
+        boolean gr = isGround(type);
+        show3.g.pos.set(-(b[0] + b[3]) / 2 * s, gr ? 0.3f - b[1] * s : 5.2f - (b[1] + b[4]) / 2 * s, -(b[2] + b[5]) / 2 * s);
+        root.add(show3.g);
+    }
+
+    static void bounds(Node3 n, float ox, float oy, float oz, float[] b) {
+        float px = ox + n.pos.x, py = oy + n.pos.y, pz = oz + n.pos.z;
+        if (n.mesh != null && n.visible) {
+            Vector3 h = n.mesh.half;
+            float cx = px + n.mesh.center.x * n.scl.x, cy = py + n.mesh.center.y * n.scl.y, cz = pz + n.mesh.center.z * n.scl.z;
+            float hx = h.x * n.scl.x, hy = h.y * n.scl.y, hz = h.z * n.scl.z;
+            b[0] = Math.min(b[0], cx - hx); b[1] = Math.min(b[1], cy - hy); b[2] = Math.min(b[2], cz - hz);
+            b[3] = Math.max(b[3], cx + hx); b[4] = Math.max(b[4], cy + hy); b[5] = Math.max(b[5], cz + hz);
+        }
+        for (Node3 c : n.kids) bounds(c, px, py, pz, b);
+    }
+
+    public void showcaseTick(float t, float dt) {
+        if (show3 == null) return;
+        show3.g.setEuler(gr3() ? 0 : MathUtils.sin(t * 0.7f) * 0.12f, t * 0.45f, 0);
+        if (show3.rot != null) show3.rot.rotateY(dt * 25f);
+    }
+
+    boolean gr3() { return show3Type != null && isGround(show3Type) && !show3Type.equals("node"); }
 
     void opReset() {
         op = mode.equals("duel") ? null : Ops.sel();
         opCdMax = op != null ? Ops.cdOf(op) : 0;
         opCd = op != null ? 4f : 0;
         opRadarT = 0; opLuckT = 0; opOverT = 0; opRushT = 0; opInvT = 0; opSaved = false; opLow = false;
+        skillReset();
     }
 
     /** Умение оператора (кнопка с портретом, на ПК — Q). */
@@ -493,6 +544,7 @@ public class Game {
     public float st(String k) { Float v = ST.get(k); return v == null ? 0 : v; }
 
     public void applyStats() {
+        Skills.off = "duel".equals(mode);
         String V = VEH;
         ST.put("maxHp", (float) Math.round((100 + 20 * u("armor")) * (hasMod("glass") ? 0.5f : 1f)));
         ST.put("regen", 10f + 4 * u("armor"));
@@ -519,6 +571,15 @@ public class Game {
         ST.put("chan", 0.42f * (float) Math.pow(0.85, u("channels")));
         ST.put("twin", 0.15f * u("twin"));
         ST.put("mog", (float) u("mog"));
+        // навыки командира
+        ST.put("maxHp", (float) Math.round(st("maxHp") * (1 + Skills.k("a_hp"))));
+        ST.put("regen", st("regen") + Skills.on("a_reg") * 5f);
+        ST.put("cool", st("cool") * (1 + Skills.k("a_cool")));
+        float gk = 1 + Skills.k("f_dmg"), mk = 1 + Skills.k("f_mis");
+        ST.put("dmg", st("dmg") * gk); ST.put("ldps", st("ldps") * gk);
+        ST.put("rate", st("rate") * (1 + Skills.k("f_rate")));
+        ST.put("warhead", st("warhead") * mk); ST.put("fdmg", st("fdmg") * mk);
+        ST.put("reload", st("reload") / (1 + Skills.k("f_mis") * 0.5f));
     }
 
     public void setVehicleModel() {
@@ -604,12 +665,13 @@ public class Game {
                 && R.nextFloat() < CM.getFloat("objShare", 0.5f)) e.tgt = "obj";
         if (type.equals("scout")) { e.ang = a; e.dir = R.nextFloat() < 0.5f ? -1 : 1; e.distR = rr(260, 330); }
         if (type.equals("stealth")) { e.stealth = true; e.reveal = 0; setBodyAlpha(e, 0.15f); }
-        if (type.equals("phantom")) { e.phantom = true; setBodyAlpha(e, 0f); } // видна только на радаре и вспышкой при попадании
+        if (type.equals("phantom")) { e.phantom = true; setBodyAlpha(e, Skills.on("t_ult") > 0 ? 0.35f : 0f); } // видна только на радаре и вспышкой при попадании
         if (type.equals("matka")) e.heal = 1f;
         if (type.equals("erk")) e.trail = FX.trail(md.g, false);
         if (type.equals("core") || type.equals("chimera")) spawnNodes(e, type.equals("chimera") ? 5 : 4);
         e.id = nextId++;
         enemies.add(e);
+        if (!netView && !"duel".equals(mode) && Bestiary.see(type) && ui != null) ui.toast("Бестиарий: новая запись — " + Bestiary.get(type).name);
         if (boss) bosses.add(e);
         return e;
     }
@@ -639,6 +701,7 @@ public class Game {
 
     public int addCoins(float n) {
         if (op != null && (state.equals("run") || state.equals("dying"))) n *= (1 + Ops.coinBonus(op.id)) * (opLuckT > 0 ? 2f : 1f);
+        n *= 1 + Skills.k("t_coin");
         int k = Math.max(1, Math.round(n));
         setCoins(coins() + k); runCoins += k; qProg("coins", k, false);
         return k;
@@ -670,6 +733,10 @@ public class Game {
             }
         }
         if (!src.equals("op")) dmg *= opDmgMul();
+        if (!netView && Skills.on("f_crit") > 0 && !src.equals("op") && R.nextFloat() < Skills.k("f_crit")) {
+            dmg *= 2f;
+            if (p != null) FX.sparks(p, 6, new Color(1f, 0.85f, 0.3f, 1));
+        }
         if (e.stealth) e.reveal = 2.5f;
         if (netView) {
             if (p != null) FX.sparks(p, 3);
@@ -712,8 +779,20 @@ public class Game {
         boolean shotKill = e.type.equals("erk") || e.type.equals("shell") || e.type.equals("node");
         score += Math.round(D.getFloat("pts") * 10 * scoreMul());
         addCoins(D.getFloat("coin") * difCoin * (mode.equals("endless") ? 2f : 0.5f)); G.sfx("coin", 0.5f, 60);
-        combo += 1; comboT = 3f; kills += 1;
-        if (!shotKill) multiKill();
+        combo += 1; comboT = 3f + Skills.on("t_combo"); kills += 1;
+        if (!shotKill) {
+            multiKill();
+            statAdd("e_" + e.type, 1);
+            if (!netView && Skills.on("t_luck") > 0 && R.nextFloat() < Skills.k("t_luck")) {
+                int bonus = addCoins(D.getFloat("coin") * difCoin * (mode.equals("endless") ? 2f : 0.5f) * 4f);
+                if (ui != null) ui.toast("Трофей! +" + bonus + " монет");
+                G.sfx("coin", 0.9f, 60);
+            }
+            if (!netView && Skills.on("f_ult") > 0 && squallT <= 0 && ++squallN >= 25) {
+                squallN = 0; squallT = 6f; heat = 0; overheated = false;
+                if (ui != null) ui.callout("ШКВАЛ!", 4, "6 с огня без перегрева");
+            }
+        }
         if (!netView && !shotKill) {
             boolean hv = e.type.equals("heavy") || e.type.equals("armor") || e.type.equals("mech") || e.type.equals("matka") || e.type.equals("phantom");
             passXp(e.boss ? Pass.XP_BOSS : (hv ? Pass.XP_HEAVY : Pass.XP_KILL));
@@ -770,7 +849,7 @@ public class Game {
 
     /** Опыт боевого пропуска (только за свои бои, не за зрителя дуэли). */
     void passXp(int n) {
-        int lv = Pass.add(n);
+        int lv = Pass.add(Math.round(n * (1 + Skills.k("t_xp"))));
         if (lv > 0 && ui != null) ui.toast("Боевой пропуск: уровень " + lv + "! Забери награду в меню");
     }
 
@@ -966,7 +1045,7 @@ public class Game {
             E e = enemies.get(i);
             e.t += dt;
             if (e.stealth) {
-                e.reveal = Math.max(opRadarT > 0 ? 0.3f : 0, e.reveal - dt);
+                e.reveal = Math.max(opRadarT > 0 || Skills.on("t_ult") > 0 ? 0.3f : 0, e.reveal - dt);
                 boolean vis = !hidden(e);
                 float tr = 1 - e.md.body.alpha;
                 tr = MathUtils.lerp(tr, vis ? 0.25f : 0.86f, Math.min(1f, dt * 6f));
@@ -1354,6 +1433,11 @@ public class Game {
         if ("obj".equals(tgt) && obj != null && obj.hp > 0) { damageObj(dmg); return; }
         if (smokeT > 0) dmg /= 3f;
         if (opInvT > 0) { FX.sparks(tmpV.set(rr(-1.4f, 1.4f), rr(1.6f, 3.6f), rr(-4, 4)), 6, new Color(1, 0.9f, 0.5f, 1)); return; }
+        if (Skills.on("a_def") > 0 && R.nextFloat() < Skills.k("a_def")) {
+            FX.sparks(tmpV.set(rr(-1.4f, 1.4f), rr(1.6f, 3.6f), rr(-4, 4)), 8, new Color(0.7f, 0.9f, 1, 1));
+            G.sfx("tink", 0.6f, 60);
+            return;
+        }
         hp -= dmg; hurtT = 0.5f; shake = Math.max(shake, Math.min(1f, 0.3f + dmg / 20f)); G.hap(45); G.sfx("hit", 0.8f, 80); waveHit = true;
         FX.sparks(tmpV.set(rr(-1.4f, 1.4f), rr(1.6f, 3.6f), rr(-4, 4)), 10);
         if (hp <= 0 && op != null && op.id.equals("valk") && !opSaved) {
@@ -1361,6 +1445,12 @@ public class Game {
             opSaved = true; hp = st("maxHp") * 0.4f; opInvT = 2f;
             FX.glow(tmpV.set(0, 3, 0), 18f, new Color(1, 0.9f, 0.5f, 1), 1f);
             if (ui != null) { ui.opEvent("save"); ui.toast("Ангел-хранитель спас комплекс!"); }
+            return;
+        }
+        if (hp <= 0 && !secondUsed && Skills.on("a_ult") > 0) {
+            secondUsed = true; hp = st("maxHp") * 0.3f; opInvT = Math.max(opInvT, 1.5f);
+            FX.glow(tmpV.set(0, 3, 0), 16f, new Color(0.6f, 0.9f, 1f, 1), 1f);
+            if (ui != null) ui.callout("ВТОРОЕ ДЫХАНИЕ!", 4, "комплекс снова в строю");
             return;
         }
         if (hp > 0) opEv("hit");
@@ -2400,7 +2490,7 @@ public class Game {
                 fireT -= dt;
                 boolean gunOn = st("gun") > 0 && !VEH.equals("tor");
                 if (firing && gunOn && !overheated) {
-                    while (fireT <= 0) { fireT += 1f / (st("rate") * opRateMul()); fireBullet(); if (opOverT <= 0) heat += st("heatPer"); }
+                    while (fireT <= 0) { fireT += 1f / (st("rate") * opRateMul()); fireBullet(); if (opOverT <= 0 && squallT <= 0) heat += st("heatPer"); }
                     if (heat >= 1) { heat = 1; overheated = true; G.sfx("alarm", 0.6f, 900); }
                 } else fireT = Math.max(fireT, 0);
                 if (VEH.equals("tor")) {
@@ -2425,6 +2515,7 @@ public class Game {
                     if (reloadT <= 0) { missiles += 1; reloadT = missiles < st("maxMis") ? st("reload") : 0; syncNoses(); }
                 }
                 if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
+                if (squallT > 0) squallT -= dt;
                 empT = Math.max(0, empT - dt); smokeT = Math.max(0, smokeT - dt);
                 opTick(dt);
                 abCd.put("smoke", Math.max(0, abCd.get("smoke") - dt)); abCd.put("repair", Math.max(0, abCd.get("repair") - dt));

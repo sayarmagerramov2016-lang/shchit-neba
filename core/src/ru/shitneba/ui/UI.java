@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import ru.shitneba.Bestiary;
 import ru.shitneba.BlackBox;
 import ru.shitneba.Daily;
 import ru.shitneba.Duel;
@@ -27,6 +28,7 @@ import ru.shitneba.Game;
 import ru.shitneba.GameUI;
 import ru.shitneba.Ops;
 import ru.shitneba.Pass;
+import ru.shitneba.Skills;
 import ru.shitneba.Strike;
 import ru.shitneba.gfx.Replay;
 import ru.shitneba.gfx.Tex;
@@ -96,7 +98,7 @@ public class UI implements GameUI, InputProcessor {
         op = new OpUI(this);
         DESK = !G.isMobile() && System.getenv("SN_PHONE") == null; // SN_PHONE=1 — интерфейс как на телефоне (для скриншотов магазина)
         String[][] bt = {{"endless", "menu"}, {"garage", "menu"}, {"shop", "menu"}, {"settings", "menu"}, {"about", "menu"},
-                {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}, {"ops", "menu"}, {"pass", "menu"}};
+                {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}, {"ops", "menu"}, {"pass", "menu"}, {"cmd", "menu"}, {"best", "menu"}};
         for (String[] b : bt) backTo.put(b[0], b[1]);
     }
 
@@ -206,9 +208,10 @@ public class UI implements GameUI, InputProcessor {
     // ================= панели =================
     public void show(String name) {
         if (!name.equals(panel)) { panelT = 0; scroll = 0; BlackBox.log("экран «" + name + "»"); }
+        if (panel.equals("best") && !name.equals("best")) g.showcase(null);
         panel = name;
         tapReady = false;
-        if (name.equals("menu")) g.ensureQuests();
+        if (name.equals("menu")) { g.ensureQuests(); checkUnlocks(); }
     }
 
     /** Видна ли девчонка-оператор в бою (те же условия, что у боевого HUD). */
@@ -370,6 +373,8 @@ public class UI implements GameUI, InputProcessor {
             case "dres": pDRes(); break;
             case "ops": op.pOps(); break;
             case "pass": pPass(); break;
+            case "cmd": pCmd(); break;
+            case "best": pBest(); break;
             case "oproll": op.pRoll(); break;
             default: break;
         }
@@ -594,7 +599,7 @@ public class UI implements GameUI, InputProcessor {
     static final class Card {
         String title, desc = "", btn, sub; Color subc;
         boolean en, sel; Runnable act;
-        Texture sw; Color swc;
+        Texture sw; Color swc, anim;
         int lv = -1, max;
     }
 
@@ -633,7 +638,19 @@ public class UI implements GameUI, InputProcessor {
             if (c.sel) d.rect(x, y, 4, h, C_ACC, 1);
         }
         float yy = y + 12;
-        if (c.sw != null) { d.tex(c.sw, x + 12, yy, w - 24, 40, (w - 24) / 64f, 40 / 64f); d.frame(x + 12, yy, w - 24, 40, 1, BLACK, 0.4f); yy += 44; }
+        if (c.sw != null) {
+            d.tex(c.sw, x + 12, yy, w - 24, 40, (w - 24) / 64f, 40 / 64f);
+            if (c.anim != null && !d.off) {
+                // бегущий блик цвета свечения
+                float k = (T * 0.45f) % 1f, bx = x + 12 + (w - 24) * k, bw = Math.min(40, w * 0.2f);
+                d.clip(x + 12, yy, w - 24, 40);
+                d.gradH(bx - bw, yy, bw, 40, c.anim, 0f, c.anim, 0.55f);
+                d.gradH(bx, yy, bw, 40, c.anim, 0.55f, c.anim, 0f);
+                d.unclip();
+                if (clipOn) d.clip(PX + 2, viewTop - 2, PW - 4, viewH + 4);
+            }
+            d.frame(x + 12, yy, w - 24, 40, 1, BLACK, 0.4f); yy += 44;
+        }
         else if (c.swc != null) {
             d.rect(x + 12, yy + 10, w - 24, 20, BLACK, 0.4f);
             d.gradH(x + 16, yy + 17, w - 32, 6, c.swc, 0.1f, c.swc, 1);
@@ -753,12 +770,23 @@ public class UI implements GameUI, InputProcessor {
             d.rect(lx, m + th * 0.8f - ts * 0.24f, Math.max(10, tx + room - lx), 1.5f, C_STEEL, 0.35f);
         }
         // звание и рекорд под титулом
-        float ry = m + th + 10;
+        float ry = m + th + 10, er = 22, ex = m + 6 + er;
         if (!d.off) {
-            d.text(rankText(), m + 6, ry + 12, 12, C_RANK, Draw.BOLD, -1);
-            bar(m + 6, ry + 18, tw - 12, 5, rankK(), C_RANK);
-            d.text("Рекорд бесконечного боя: " + G.SV.best, m + 6, ry + 40, 12, C_MUT, Draw.MAIN, -1);
+            boolean hv = hover(m, ry - 4, tw, 52);
+            if (hv) d.rect(m, ry - 4, tw, 52, C_TEAL, 0.08f);
+            Emblem.draw(d, Emblem.sel(), ex, ry + 20, er, T, false);
+            float rx = ex + er + 10, rw = tw - (rx - m) - 6;
+            d.text(rankText(), rx, ry + 12, 12, C_RANK, Draw.BOLD, -1);
+            bar(rx, ry + 18, rw, 5, rankK(), C_RANK);
+            int fp = Skills.free();
+            d.text(fp > 0 ? "Командир: " + fp + " очк. навыков — жми!" : "Рекорд бесконечного боя: " + G.SV.best, rx, ry + 40, 12, fp > 0 ? C_ACC : C_MUT, fp > 0 ? Draw.BOLD : Draw.MAIN, -1);
+            if (fp > 0) {
+                float bsz = 20 + 2 * MathUtils.sin(T * 5);
+                kit.img("notification_badge", ex + er - bsz * 0.4f, ry - 4 - bsz * 0.3f, bsz, bsz);
+                d.text(String.valueOf(fp), ex + er + bsz * 0.1f, ry - 4 + bsz * 0.2f + 4, 11, WHITE, Draw.BOLD, 0);
+            }
         }
+        if (tap(m, ry - 4, tw, 52)) { G.sfx("click"); cmdTab = 0; show("cmd"); }
 
         // --- верхняя полоса: монеты, звёзды, подарок, настройки ---
         float bs = 46, bh = 42, bw = kit.wAt("resource_bar", bh);
@@ -804,8 +832,8 @@ public class UI implements GameUI, InputProcessor {
         // --- нижний ряд слева ---
         float lw = px - m - 16, sh = 46;
         int qn = questsReady();
-        String[] nm = {"Операторы", "Пропуск", "Задания", "Достижения", "Рекорды", "Улучшения"};
-        String[] ic = {"star_icon", "shield_emblem_icon", "missions_clipboard_icon", "achievements_trophy_icon", "records_chart_icon", "coin_icon"};
+        String[] nm = {"Операторы", "Пропуск", "Задания", "Достижения", "Рекорды", "Бестиарий", "Улучшения"};
+        String[] ic = {"star_icon", "shield_emblem_icon", "missions_clipboard_icon", "achievements_trophy_icon", "records_chart_icon", "radar_panel", "coin_icon"};
         int nb = nm.length;
         float sgp = 6, sw = (lw - sgp * (nb - 1)) / nb, sy = d.h - m - sh;
         int pr = Pass.ready();
@@ -818,6 +846,7 @@ public class UI implements GameUI, InputProcessor {
                     case 2: show("quests"); break;
                     case 3: show("ach"); break;
                     case 4: show("records"); break;
+                    case 5: show("best"); break;
                     default: shopVeh = -1; backTo.put("shop", "menu"); show("shop"); break;
                 }
             }
@@ -922,6 +951,8 @@ public class UI implements GameUI, InputProcessor {
                             });
                     c.sel = sel;
                     c.sw = Tex.camo(id);
+                    if (s.has("anim")) { c.anim = G.hex(s.getString("glow", "#ffffff")); c.sub = "Анимированная"; c.subc = c.anim; }
+                    if (!own && s.has("req")) c.desc = s.getString("req");
                     cs.add(c);
                 }
             } else {
@@ -1212,6 +1243,7 @@ public class UI implements GameUI, InputProcessor {
     void pOver() {
         frame("over", 480, false, true, () -> {
             title("Комплекс подбит");
+            if (!d.off) Emblem.draw(d, Emblem.sel(), cx + 20, cy - 31, 17, T, false);
             if (overRec) {
                 float k = 0.75f + 0.25f * MathUtils.sin(T * 4);
                 d.text("НОВЫЙ РЕКОРД!", cx + cw / 2, cy + 18, 20, new Color(1, 0.7f * k + 0.1f, 0.1f, 1), Draw.WIDE, 0);
@@ -1524,6 +1556,7 @@ public class UI implements GameUI, InputProcessor {
             boolean chal = isChal(m);
             boolean win = g.resWin;
             title(chal ? (win ? "Испытание пройдено" : "Испытание провалено") : (win ? "Миссия выполнена" : "Миссия провалена"));
+            if (!d.off) Emblem.draw(d, Emblem.sel(), cx + 20, cy - 31, 17, T, false);
             d.text(chal ? m.getString("title") : m.getString("id") + " · " + m.getString("title"), cx + cw / 2, cy + 14, 14, C_MUT, Draw.MAIN, 0);
             cy += 24;
             if (win) {
@@ -1652,6 +1685,174 @@ public class UI implements GameUI, InputProcessor {
             }
             cy += ((Pass.LEVELS + cols - 1) / cols) * (h + gp) + 4;
         });
+    }
+
+    // =========================================================
+    //          3.10.0: КОМАНДИР (навыки, эмблемы), БЕСТИАРИЙ
+    // =========================================================
+    public int cmdTab, bestTab; public String bestSel;
+
+    /** Новые эмблемы и награды за бестиарий — тостом при входе в меню. */
+    void checkUnlocks() {
+        List<Emblem.Def> em = Emblem.check();
+        if (!em.isEmpty()) toast("Новая эмблема: " + em.get(0).name + (em.size() > 1 ? " и ещё " + (em.size() - 1) : ""));
+        if (Bestiary.seenCount() >= 20 && !G.SV.skOwn.contains("scanner")) {
+            G.SV.skOwn.add("scanner"); G.save();
+            toast("Бестиарий: 20 записей — окраска «Сканер» в гараже!");
+        }
+    }
+
+    void pCmd() {
+        frame("cmd", 960, false, true, () -> {
+            title("Командир");
+            cmdTab = tabs(new String[]{"Навыки" + (Skills.free() > 0 ? " (" + Skills.free() + ")" : ""), "Эмблемы"}, cmdTab);
+            if (cmdTab == 0) skillTree(); else emblemGrid();
+        });
+    }
+
+    void skillTree() {
+        // шапка: эмблема, звание, очки
+        float hh = 70;
+        if (!d.off) {
+            box(cx, cy, cw, hh, WHITE, 0.04f, C_LINE, 0.2f, 1);
+            Emblem.draw(d, Emblem.sel(), cx + 38, cy + hh / 2, 27, T, false);
+            d.text(G.RANK_N[G.rankIndex()].toUpperCase(), cx + 78, cy + 28, 17, C_RANK, Draw.WIDE, -1);
+            int nx = Skills.xpToNext();
+            d.text(String.format("Очки навыков: %d из %d · опыт %d%s", Skills.free(), Skills.earned(), G.xp(),
+                    nx > 0 ? " · следующее очко через " + nx : ""), cx + 78, cy + 52, 13, C_MUT, Draw.MAIN, -1);
+        }
+        boolean canReset = Skills.spent() > 0 && G.SV.c >= Skills.RESET_COST;
+        if (button(cx + cw - 196, cy + 17, 180, 36, "Сбросить · " + Skills.RESET_COST, NORMAL, canReset, 13)) {
+            if (Skills.reset()) { toast("Навыки сброшены — очки вернулись"); selectVeh(G.SV.veh); }
+        }
+        cy += hh + 10;
+        if (Skills.off) label("В дуэли навыки не действуют — там всё по-честному.", 12, C_MUT);
+        int cols = cw >= 640 ? 3 : 1;
+        float gp = 10, w = (cw - gp * (cols - 1)) / cols, nh = 96, ngp = 14;
+        float y0 = cy, maxY = cy;
+        for (int b = 0; b < Skills.BRANCHES.length; b++) {
+            String br = Skills.BRANCHES[b];
+            float x = cols == 3 ? cx + b * (w + gp) : cx;
+            float y = cols == 3 ? y0 : maxY;
+            Color bc = b == 0 ? C("ff8a5a") : (b == 1 ? C("7fd6ff") : C_ACC);
+            if (!d.off) {
+                d.rect(x, y + 3, 3, 16, bc, 1);
+                d.text(Skills.BRANCH_N[b].toUpperCase(), x + 10, y + 17, 15, bc, Draw.WIDE, -1);
+            }
+            y += 28;
+            float prevY = -1;
+            for (final Skills.Node n : Skills.NODES) {
+                if (!n.branch.equals(br)) continue;
+                int lv = Skills.lv(n.id);
+                boolean open = Skills.open(n), can = Skills.canBuy(n);
+                if (!d.off) {
+                    if (prevY >= 0) d.rect(x + 22, prevY, 3, y - prevY, open ? bc : WHITE, open ? 0.6f : 0.12f);
+                    boolean ult = n.ult();
+                    box(x, y, w, nh, ult ? bc : WHITE, lv > 0 ? 0.12f : (open ? 0.05f : 0.02f), lv > 0 || ult ? bc : C_LINE, lv > 0 ? 1 : (open ? 0.35f : 0.15f), lv > 0 ? 2 : 1);
+                    d.text(n.name + (ult ? " · УЛЬТА" : ""), x + 12, y + 22, 15, open ? C_TXT : C_MUT, Draw.BOLD, -1);
+                    for (int i = 0; i < n.max; i++) d.rect(x + w - 14 - (n.max - i) * 18, y + 12, 14, 6, i < lv ? bc : WHITE, i < lv ? 1 : 0.12f);
+                    d.wrap(n.desc(Math.max(1, lv)), x + 12, y + 30, w - 24, 12, open ? C_MUT : C("5a6466"), Draw.MAIN, -1);
+                }
+                String bt = lv >= n.max ? "Изучено" : (!open ? "Сначала предыдущий" : "Изучить · " + n.cost + (n.cost == 1 ? " очко" : " очка"));
+                if (button(x + 10, y + nh - 38, w - 20, 30, bt, BUY, can, 12)) {
+                    if (Skills.buy(n)) { G.sfx("coin"); toast(n.name + ": уровень " + Skills.lv(n.id)); selectVeh(G.SV.veh); }
+                }
+                prevY = y + nh;
+                y += nh + ngp;
+            }
+            maxY = Math.max(maxY, y);
+        }
+        cy = maxY;
+    }
+
+    void emblemGrid() {
+        label("Эмблема видна в меню, на экране итога и в онлайн-рекордах. Открываются за заслуги.", 13, C_MUT);
+        int cols = Math.max(2, Math.min(4, (int) (cw / 200)));
+        float gp = 8, w = (cw - gp * (cols - 1)) / cols, h = 168;
+        for (int i = 0; i < Emblem.ALL.length; i++) {
+            final Emblem.Def e = Emblem.ALL[i];
+            float x = cx + (i % cols) * (w + gp), y = cy + (i / cols) * (h + gp);
+            boolean own = Emblem.own(e.id), sel = Emblem.sel().equals(e.id);
+            if (!d.off) {
+                box(x, y, w, h, sel ? C_ACC : WHITE, sel ? 0.08f : 0.04f, sel ? C_ACC : C_LINE, sel ? 1 : 0.2f, sel ? 2 : 1);
+                Emblem.draw(d, e.id, x + w / 2, y + 44, 32, T + i * 0.7f, !own);
+                d.text(e.name, x + w / 2, y + 96, 14, own ? C_TXT : C_MUT, Draw.BOLD, 0);
+                d.text(e.req, x + w / 2, y + 114, 11, C_MUT, Draw.MAIN, 0);
+            }
+            if (button(x + 10, y + h - 40, w - 20, 30, sel ? "Выбрана" : (own ? "Выбрать" : "Закрыта"), BUY, own && !sel, 12)) {
+                G.SV.emSel = e.id; G.save(); G.sfx("click");
+            }
+        }
+        cy += ((Emblem.ALL.length + cols - 1) / cols) * (h + gp);
+    }
+
+    void pBest() {
+        if (bestSel == null) for (Bestiary.Entry e : Bestiary.ALL) if (Bestiary.seen(e.id)) { bestSel = e.id; break; }
+        if (!d.off) {
+            g.showcase(bestSel != null && Bestiary.seen(bestSel) ? bestSel : null);
+            g.showcaseTick(T, Gdx.graphics.getDeltaTime());
+        }
+        float w = Math.min(560, d.w * 0.52f);
+        frame("best", w, true, false, () -> {
+            title("Бестиарий");
+            label(String.format("Открыто %d из %d · запись открывается, когда враг впервые появится в бою", Bestiary.seenCount(), Bestiary.ALL.length), 12, C_MUT);
+            Bestiary.Entry s = bestSel != null ? Bestiary.get(bestSel) : null;
+            if (s != null && Bestiary.seen(s.id)) {
+                JsonValue D = G.D.get("DT").get(s.id);
+                float bh = 0;
+                boolean was = d.off;
+                if (!was) { d.off = true; bh = bestInfo(s, D, cx, cy); d.off = false; box(cx, cy, cw, bh, C_TEAL, 0.05f, C_TEAL, 0.4f, 1); }
+                bh = bestInfo(s, D, cx, cy);
+                cy += bh + 10;
+            }
+            bestTab = tabs(Bestiary.CLASSES, bestTab);
+            String cls = Bestiary.CLASSES[bestTab];
+            int cols = 2;
+            float gp = 6, rw = (cw - gp) / cols, rh = 40;
+            int i = 0;
+            for (final Bestiary.Entry e : Bestiary.ALL) {
+                if (!e.cls.equals(cls)) continue;
+                float x = cx + (i % cols) * (rw + gp), y = cy + (i / cols) * (rh + gp);
+                boolean seen = Bestiary.seen(e.id), sel = e.id.equals(bestSel);
+                if (!d.off) {
+                    boolean hv = hover(x, y, rw, rh);
+                    box(x, y, rw, rh, sel ? C_ACC : WHITE, sel ? 0.12f : (hv ? 0.07f : 0.04f), sel ? C_ACC : C_LINE, sel ? 1 : 0.2f, 1);
+                    d.text(seen ? e.name : "???", x + 10, y + 25, 13, seen ? C_TXT : C_MUT, Draw.BOLD, -1);
+                    if (seen) d.text(String.valueOf(Bestiary.kills(e.id)), x + rw - 10, y + 25, 12, C_ACC, Draw.BOLD, 1);
+                }
+                if (tap(x, y, rw, rh)) {
+                    G.sfx("click");
+                    if (seen) bestSel = e.id; else toast("Ещё не встречали — запись откроется в бою");
+                }
+                i++;
+            }
+            cy += ((i + cols - 1) / cols) * (rh + gp);
+        });
+    }
+
+    /** Карточка выбранного врага; возвращает высоту. */
+    float bestInfo(Bestiary.Entry s, JsonValue D, float x, float y) {
+        float yy = y + 10;
+        d.text(s.name.toUpperCase(), x + 12, yy + 18, 18, C_TXT, Draw.WIDE, -1);
+        d.text(s.cls, x + cw - 12, yy + 16, 12, C_TEAL, Draw.BOLD, 1);
+        yy += 28;
+        yy += d.wrap(s.desc, x + 12, yy, cw - 24, 13, C_MUT, Draw.MAIN, -1) + 4;
+        yy += d.wrap("Совет: " + s.tip, x + 12, yy, cw - 24, 13, C_ACC, Draw.MAIN, -1) + 6;
+        if (D != null) {
+            String[][] cells = {{"Прочность", String.valueOf(Math.round(D.getFloat("hp") * 10))},
+                    {"Скорость", String.valueOf(Math.round(D.get("sp").getFloat(1)))},
+                    {"Урон", String.valueOf(Math.round(D.getFloat("dmg")))},
+                    {"Сбито тобой", String.valueOf(Bestiary.kills(s.id))}};
+            float gp = 6, w = (cw - 24 - gp * 3) / 4;
+            for (int i = 0; i < 4; i++) {
+                float cx0 = x + 12 + i * (w + gp);
+                box(cx0, yy, w, 44, WHITE, 0.05f, C_LINE, 0.2f, 1);
+                d.text(cells[i][0], cx0 + w / 2, yy + 15, 11, C_MUT, Draw.MAIN, 0);
+                d.text(cells[i][1], cx0 + w / 2, yy + 36, 16, i == 3 ? C_ACC : C_TXT, Draw.TITLE, 0);
+            }
+            yy += 52;
+        }
+        return yy - y;
     }
 
     /** 3.9.0: карточка «Вызов дня» вверху «Испытаний». */
@@ -1833,7 +2034,7 @@ public class UI implements GameUI, InputProcessor {
         }
         // метки врагов
         List<Game.E> list = new ArrayList<>();
-        for (Game.E e : G0.enemies) if (!hiddenE(e) && !e.type.equals("node") && !e.phantom) list.add(e);
+        for (Game.E e : G0.enemies) if (!hiddenE(e) && !e.type.equals("node") && (!e.phantom || Skills.on("t_ult") > 0)) list.add(e);
         final Vector3 cp = G0.camPos;
         Collections.sort(list, (a, b) -> Float.compare(a.pos.dst2(cp), b.pos.dst2(cp)));
         int arrows = 0, marks = 0;

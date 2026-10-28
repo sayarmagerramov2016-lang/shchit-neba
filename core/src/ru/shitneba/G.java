@@ -17,7 +17,7 @@ import java.util.Map;
 
 /** Глобальные данные: data.json (D), сохранение (SV), звания, утилиты. Порт g.gd. */
 public final class G {
-    public static final String VER = "3.9.0";
+    public static final String VER = "3.10.0";
     public static JsonValue D;
     public static Save SV;
     public static Sfx sfx;
@@ -75,6 +75,11 @@ public final class G {
         public String dcDay = ""; public int dcStreak;
         public String bpMonth = ""; public int bpXp;
         public final List<Integer> bpGot = new ArrayList<>();
+        // 3.10.0: командир — навыки, эмблемы, бестиарий
+        public final Map<String, Integer> skl = new LinkedHashMap<>();
+        public final List<String> emOwn = new ArrayList<>();
+        public String emSel = "recruit";
+        public final List<String> seen = new ArrayList<>();
     }
 
     public static void init() {
@@ -203,6 +208,13 @@ public final class G {
                 JsonValue gl = bp.get("got");
                 if (gl != null) for (JsonValue v = gl.child; v != null; v = v.next) s.bpGot.add(v.asInt());
             }
+            JsonValue cmd = d.get("cmd");
+            if (cmd != null) {
+                readIntMap(cmd.get("sk"), s.skl);
+                readList(cmd.get("em"), s.emOwn, true);
+                s.emSel = cmd.getString("ems", "recruit");
+                readList(cmd.get("seen"), s.seen, true);
+            }
             return true;
         } catch (Throwable t) {
             Gdx.app.error("save", "bad save " + f.name(), t);
@@ -273,6 +285,12 @@ public final class G {
             w.object("bp").set("month", s.bpMonth).set("xp", s.bpXp);
             w.array("got"); for (int v : s.bpGot) w.value(v); w.pop();
             w.pop();
+            w.object("cmd");
+            w.object("sk"); for (Map.Entry<String, Integer> e : s.skl.entrySet()) w.set(e.getKey(), e.getValue()); w.pop();
+            w.array("em"); for (String v : s.emOwn) w.value(v); w.pop();
+            w.set("ems", s.emSel);
+            w.array("seen"); for (String v : s.seen) w.value(v); w.pop();
+            w.pop();
             w.array("top");
             for (Top t : s.top) w.object().set("s", t.s).set("w", t.w).set("d", t.d).set("t", t.t).set("v", t.v).pop();
             w.pop();
@@ -307,6 +325,7 @@ public final class G {
     public static int addXp(int n) {
         if (n <= 0) return -1;
         int before = rankIndex();
+        n = Math.round(n * (1 + Skills.k("t_xp")));
         SV.xp = xp() + n;
         int after = rankIndex();
         if (after > before) {

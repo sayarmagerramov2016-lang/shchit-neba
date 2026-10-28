@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.JsonValue;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -69,6 +70,8 @@ public final class Models {
         if (m != null) return m;
         m = hull(0.55f, 0.12f, 0.42f, 1f);
         m.panelScale = 0.26f; m.camo = Tex.camoTile(id); m.shadowRecv = true;
+        JsonValue sk = G.D.get("SK_VEH").get(id);
+        if (sk != null && sk.has("anim")) { m.anim = sk.getInt("anim"); m.animCol.set(G.hex(sk.getString("glow", "#ffffff"))); }
         camoMats.put(id, m);
         return m;
     }

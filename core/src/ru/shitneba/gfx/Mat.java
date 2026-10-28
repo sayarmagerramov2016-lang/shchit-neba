@@ -18,6 +18,8 @@ public class Mat {
     public float emission = 0f;
     // hull
     public Texture camo;
+    /** 3.10.0: анимированная окраска (0 — нет) и цвет её свечения. */
+    public int anim; public final Color animCol = new Color(1, 1, 1, 1);
     public float camoScale = 0.2f, panelScale = 0.45f, seams = 1f, dust = 1f, dustH = 1.7f, burnt = 0f, wear = 0.6f;
     /** множитель альфы (transparency) */
     public float alpha = 1f;
@@ -32,6 +34,7 @@ public class Mat {
         m.vcol = vcol; m.shadowRecv = shadowRecv; m.scissor = scissor; m.hull = hull;
         m.color.set(color); m.tex = tex; m.uvx = uvx; m.uvy = uvy; m.rough = rough; m.metal = metal; m.spec = spec; m.emission = emission;
         m.camo = camo; m.camoScale = camoScale; m.panelScale = panelScale; m.seams = seams; m.dust = dust; m.dustH = dustH; m.burnt = burnt; m.wear = wear;
+        m.anim = anim; m.animCol.set(animCol);
         m.alpha = alpha; m.distFadeMin = distFadeMin; m.distFadeMax = distFadeMax; m.order = order;
         return m;
     }
@@ -49,6 +52,7 @@ public class Mat {
         if (shadowRecv) k |= 64;
         if (blend == ADD) k |= 128;
         if (distFadeMax > 0) k |= 256;
+        if (anim > 0 && hull) k |= 512;
         return k;
     }
 

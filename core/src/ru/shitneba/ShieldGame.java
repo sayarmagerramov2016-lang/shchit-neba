@@ -388,6 +388,17 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             {"menu", "3"}, {"p2_pass", "1.5"}, {"p2_chal", "1.5"}, {"p2_brief", "1"}, {"p2_play", "8"}, {"p2_swarm", "4"}, {"p2_swarm2", "3"},
             {"p2_new", "6"}, {"p2_multi", "0.35"}, {"p2_multi2", "4"}, {"p2_over", "4"}, {"p2_gif", "6"}, {"end", "0"}};
 
+    /** 3.10.0: командир, эмблемы, бестиарий, анимированные окраски, навыки в бою. */
+    public static final String[][] SEQ_P3 = {
+            {"menu", "3"}, {"p3_menu", "2"}, {"p3_cmd", "1.5"}, {"p3_cmd2", "1.5"}, {"p3_emb", "2"}, {"p3_best", "2.5"}, {"p3_best2", "2.5"},
+            {"p3_best3", "2.5"}, {"p3_garage", "2"}, {"p3_sk1", "2.5"}, {"p3_sk2", "2.5"}, {"p3_sk3", "2.5"}, {"p3_sk4", "2.5"}, {"p3_sk5", "2.5"},
+            {"p3_play", "8"}, {"p3_phantom", "3"}, {"p3_squall", "1"}, {"p3_over", "4"}, {"end", "0"}};
+
+    void p3skin(String id) {
+        if (!G.SV.skOwn.contains(id)) G.SV.skOwn.add(id);
+        G.SV.skVeh = id; toMenuWorld(); ui.show("menu");
+    }
+
     /** Проверка объектов кампании: плотина, колонна, подстанция, радар — камера смотрит на объект. */
     public static final String[][] SEQ_OBJ = {
             {"menu", "3"}, {"o_dam", "3"}, {"o_convoy", "4"}, {"o_sub", "3"}, {"o_radar", "3"}, {"end", "0"}};
@@ -516,6 +527,30 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "p2_multi2": botOn = true; break;
             case "p2_over": game.state = "run"; ui.show(""); forceDie(); break;
             case "p2_gif": ui.debugSaveGif(); break;
+            case "p3_menu":
+                G.SV.xp = 7600; G.SV.stats.put("bosses", 30f); G.SV.stats.put("kills", 1500f); G.SV.stats.put("nohit", 25f);
+                for (String t : new String[]{"quad", "wing", "zig", "heavy", "kami", "matka", "phantom", "gnat", "walker", "gunship", "inf", "mech", "boss", "carrier", "rpg", "mortar", "split", "stealth", "armor", "scout", "relay"}) Bestiary.see(t);
+                G.SV.stats.put("e_matka", 7f); G.SV.stats.put("e_quad", 412f);
+                ui.show("garage"); ui.show("menu"); break;
+            case "p3_cmd": ui.cmdTab = 0; ui.show("cmd"); break;
+            case "p3_cmd2":
+                for (String id : new String[]{"f_dmg", "f_dmg", "f_rate", "f_mis", "f_crit", "f_ult", "a_hp", "a_reg", "a_cool", "a_def", "a_ult", "t_coin", "t_combo"})
+                    Skills.buy(Skills.node(id));
+                break;
+            case "p3_emb": G.SV.emSel = "general"; ui.cmdTab = 1; break;
+            case "p3_best": ui.bestTab = 0; ui.bestSel = "matka"; ui.show("best"); break;
+            case "p3_best2": ui.bestTab = 2; ui.bestSel = "walker"; break;
+            case "p3_best3": ui.bestTab = 1; ui.bestSel = "mech"; break;
+            case "p3_garage": ui.show("garage"); ui.garageTab = 1; break;
+            case "p3_sk1": p3skin("chameleon"); break;
+            case "p3_sk2": p3skin("neonline"); break;
+            case "p3_sk3": p3skin("magma"); break;
+            case "p3_sk4": p3skin("scanner"); break;
+            case "p3_sk5": p3skin("aurora"); break;
+            case "p3_play": G.SV.tut = true; for (String id : new String[]{"t_xp", "t_luck", "t_ult"}) Skills.buy(Skills.node(id)); ui.launch("endless"); break;
+            case "p3_phantom": botOn = false; game.firing = false; game.spawnEnemy("phantom", ahead(120, 40)); game.spawnEnemy("stealth", ahead(140, 45)); aimAt("phantom"); break;
+            case "p3_squall": botOn = true; game.squallT = 6f; ui.callout("ШКВАЛ!", 4, "6 с огня без перегрева"); break;
+            case "p3_over": game.state = "run"; ui.show(""); forceDie(); break;
             case "fx_fire": G.SV.night = System.getenv("SN_NIGHT") != null; G.SV.ab.put("salvo", true); ui.launch("endless"); break;
             case "fx_boom": botOn = false; game.firing = false; game.aimYaw = 0; game.aimPitch = 0.08f; game.explosion(ahead(55, 1.5f), 2f); break;
             case "fx_heat": game.heat = 0.97f; game.overheated = true; game.firing = false; game.aimPitch = 0.12f; break;

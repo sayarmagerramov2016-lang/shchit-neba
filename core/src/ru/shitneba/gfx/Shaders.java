@@ -32,11 +32,40 @@ public class Shaders implements Disposable {
             "vec3 finish(vec3 c){ c = aces(max(c,vec3(0.0))*u_post.x); c = clamp(c,0.0,1.0); c = pow(c, vec3(1.0/2.2));\n" +
             " c = mix(vec3(0.5), c, u_post.y); float l = dot(c, vec3(0.299,0.587,0.114)); c = mix(vec3(l), c, u_post.z); return clamp(c,0.0,1.0); }\n";
 
+    /** 3.10.0: анимированные окраски (u_an.x — вид, u_an.y — время, u_anc — цвет свечения). */
+    static final String ANIM =
+            "#ifdef ANIM\n float at = u_an.y; float ty = u_an.x; vec3 ac = pow(u_anc, vec3(2.2));\n" +
+            " if (ty < 1.5) {\n" + // хамелеон: перелив цвета по корпусу
+            "  float ph = at*0.12 + dot(v_mp, vec3(0.05,0.08,0.035));\n" +
+            "  vec3 pal = 0.5 + 0.5*cos(6.2832*(ph + vec3(0.0,0.33,0.67)));\n" +
+            "  float l = dot(col, vec3(0.3,0.59,0.11));\n" +
+            "  col = mix(col, pow(pal, vec3(2.2))*(0.15+l*2.5), 0.8); metal = max(metal, 0.6); rough = min(rough, 0.32);\n" +
+            " } else if (ty < 2.5) {\n" + // неон: светятся швы панелей, бежит волна
+            "  float seam = 1.0 - smoothstep(0.4, 0.8, pn.r);\n" +
+            "  float wv = 0.45 + 0.55*pow(0.5+0.5*sin(at*2.6 - v_mp.y*2.2 + v_mp.z*0.7), 3.0);\n" +
+            "  col *= 0.5; emi = ac*seam*wv*2.4;\n" +
+            " } else if (ty < 3.5) {\n" + // магма: текущие раскалённые трещины
+            "  float n1 = tri3(u_panel, v_mp*0.09 + vec3(0.0, -at*0.035, at*0.02), w).g;\n" +
+            "  float n2 = tri3(u_panel, v_mp*0.21 + vec3(at*0.03, 0.0, -at*0.045), w).g;\n" +
+            "  float cr = smoothstep(0.48, 0.72, n1*0.65 + n2*0.5);\n" +
+            "  col *= 0.45; rough = max(rough, 0.7); emi = ac*cr*(1.5 + 0.7*sin(at*2.1 + v_mp.x*0.8));\n" +
+            " } else if (ty < 4.5) {\n" + // сканер: снизу вверх бежит полоса, сетка мерцает
+            "  float b = fract(v_mp.y*0.35 - at*0.3); b = exp(-pow((b-0.5)*18.0, 2.0));\n" +
+            "  float grid = 1.0 - smoothstep(0.4, 0.8, pn.r);\n" +
+            "  col *= 0.6; emi = ac*(b*1.4 + grid*0.45*(0.55+0.45*sin(at*4.0)));\n" +
+            " } else {\n" + // полярное сияние: бегущие зелёно-фиолетовые ленты
+            "  float s = 0.5 + 0.5*sin(v_mp.x*0.6 + at*0.8 + 1.5*sin(v_mp.z*0.45 + at*0.5));\n" +
+            "  vec3 band = mix(vec3(0.1,1.0,0.55), vec3(0.6,0.3,1.0), s);\n" +
+            "  float k = smoothstep(0.25, 1.0, 0.5 + 0.5*sin(v_mp.y*1.2 - at*1.1 + s*3.0));\n" +
+            "  col *= 0.55; emi = pow(band, vec3(2.2))*k*1.1;\n" +
+            " }\n#endif\n";
+
     static final String FS =
             "uniform vec4 u_color; uniform sampler2D u_tex; uniform sampler2D u_camo; uniform sampler2D u_panel; uniform sampler2D u_shadow;\n" +
             "uniform vec3 u_cam; uniform vec3 u_sunDir; uniform vec3 u_sunCol; uniform vec3 u_amb; uniform vec3 u_fogCol; uniform float u_fogD;\n" +
             "uniform vec4 u_h1; uniform vec4 u_h2; uniform vec4 u_h3; uniform vec4 u_m; uniform vec2 u_fade;\n" +
             "uniform vec4 u_pl[4]; uniform vec3 u_plc[4]; uniform float u_plN;\n" +
+            "#ifdef ANIM\nuniform vec4 u_an; uniform vec3 u_anc;\n#endif\n" +
             "varying vec3 v_wpos; varying vec3 v_n; varying vec4 v_col; varying vec2 v_uv; varying vec3 v_mp; varying vec3 v_mn;\n" +
             "#ifdef SHADOW\nvarying vec4 v_sh;\n" +
             "float unpack(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }\n" +
@@ -50,7 +79,7 @@ public class Shaders implements Disposable {
             "#ifdef HULL\nvec4 tri3(sampler2D t, vec3 p, vec3 w){ return texture2D(t,p.zy)*w.x + texture2D(t,p.xz)*w.y + texture2D(t,p.xy)*w.z; }\n#endif\n" +
             TONE +
             "void main(){\n" +
-            " vec4 base = u_color;\n" +
+            " vec4 base = u_color; vec3 emi = vec3(0.0);\n" +
             "#ifdef TEX\n vec4 t = texture2D(u_tex, v_uv); base *= vec4(t.rgb, t.a);\n#endif\n" +
             " vec3 col = pow(base.rgb, vec3(2.2)); float alpha = base.a;\n" +
             "#ifdef VCOL\n col *= v_col.rgb; alpha *= v_col.a;\n#endif\n" +
@@ -66,7 +95,9 @@ public class Shaders implements Disposable {
             " float top = clamp(v_mn.y, 0.0, 1.0)*u_h2.z; col = mix(col, dirt*1.15, top*g*0.25);\n" +
             " col = mix(col, vec3(0.045,0.04,0.035)+g*0.03, u_h3.x);\n" +
             " rough = clamp(u_h2.x + g*0.25 + low*0.25 - pn.b*u_h3.y*0.2 + u_h3.x, 0.05, 1.0);\n" +
-            " metal = clamp(u_h2.y + pn.b*u_h3.y*0.5, 0.0, 1.0)*(1.0-u_h3.x);\n#endif\n" +
+            " metal = clamp(u_h2.y + pn.b*u_h3.y*0.5, 0.0, 1.0)*(1.0-u_h3.x);\n" +
+            ANIM +
+            "#endif\n" +
             " vec3 lit;\n" +
             "#ifdef LIT\n vec3 n = normalize(v_n); if(!gl_FrontFacing) n = -n;\n" +
             " float ndl = max(dot(n, u_sunDir), 0.0); float sh = 1.0;\n" +
@@ -80,7 +111,7 @@ public class Shaders implements Disposable {
             "  float at = clamp(1.0 - dl/u_pl[i].w, 0.0, 1.0); at *= at;\n" +
             "  lit += (diff + F0*0.5)*u_plc[i]*at*(0.25 + 0.75*max(dot(n, L/max(dl,0.001)), 0.0)); } }\n" +
             "#else\n lit = col;\n#endif\n" +
-            " lit += col*u_m.w;\n" +
+            " lit += col*u_m.w + emi;\n" +
             "#ifdef FOG\n float fd = length(u_cam - v_wpos); float f = 1.0 - exp(-u_fogD*fd);\n" +
             "#ifdef ADD\n lit *= (1.0-f);\n#else\n lit = mix(lit, u_fogCol, f);\n#endif\n#endif\n" +
             "#ifdef DFADE\n alpha *= clamp((length(u_cam - v_wpos)-u_fade.x)/max(0.01,u_fade.y-u_fade.x), 0.0, 1.0);\n#endif\n" +
@@ -139,6 +170,7 @@ public class Shaders implements Disposable {
         if ((key & 64) != 0) d.append("#define SHADOW\n");
         if ((key & 128) != 0) d.append("#define ADD\n");
         if ((key & 256) != 0) d.append("#define DFADE\n");
+        if ((key & 512) != 0) d.append("#define ANIM\n");
         p = compile(VS, FS, d.toString());
         progs.put(key, p);
         return p;

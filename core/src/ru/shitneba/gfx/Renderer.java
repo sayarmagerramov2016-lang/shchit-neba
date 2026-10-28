@@ -107,6 +107,11 @@ public class Renderer implements Disposable {
         if (env.plN > 0) { p.setUniform4fv("u_pl", env.pl, 0, 16); p.setUniform3fv("u_plc", env.plc, 0, 12); }
     }
 
+    static final long T0 = System.nanoTime();
+
+    /** Время анимированных окрасок (с), по кругу, чтобы не терять точность во float. */
+    static float ANIM_T() { return ((System.nanoTime() - T0) / 1_000_000L % 600_000L) / 1000f; }
+
     ShaderProgram curProg;
     Mat curMat;
     Texture panelTex;
@@ -125,8 +130,10 @@ public class Renderer implements Disposable {
             }
             curMat = null;
         }
+        if (m.anim > 0 && m.hull) p.setUniformf("u_an", m.anim, ANIM_T(), 0, 0);
         if (m == curMat) return;
         curMat = m;
+        if (m.anim > 0 && m.hull) p.setUniformf("u_anc", m.animCol.r, m.animCol.g, m.animCol.b);
         GL20 gl = Gdx.gl;
         p.setUniformf("u_color", m.color.r, m.color.g, m.color.b, m.color.a);
         p.setUniformf("u_uvs", m.uvx, m.uvy);
