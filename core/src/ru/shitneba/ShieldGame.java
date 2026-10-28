@@ -19,6 +19,7 @@ import ru.shitneba.gfx.Dyn;
 import ru.shitneba.gfx.FpvFx;
 import ru.shitneba.gfx.Node3;
 import ru.shitneba.gfx.Renderer;
+import ru.shitneba.gfx.Replay;
 import ru.shitneba.ui.Draw;
 import ru.shitneba.ui.UI;
 
@@ -40,6 +41,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
     Draw draw;
     Strike strike;
     Duel duel;
+    Replay replay;
     FpvFx fpv;
     PerspectiveCamera cam;
     final Array<Node3> roots = new Array<>();
@@ -75,6 +77,8 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         strike = new Strike(game, world, cam);
         strike.ui = ui; ui.strike = strike; ui.strikeHost = this;
         roots.add(strike.root3);
+        replay = new Replay();
+        game.replay = replay; ui.replay = replay;
         duel = new Duel(game);
         duel.ui = ui; game.duel = duel; ui.duel = duel;
         fpv = new FpvFx();
@@ -300,6 +304,9 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         BlackBox.mark("рендер кадра");
         if (studio == null) ui.op.world3D();
         rend.render(roots, dyns);
+        BlackBox.mark("лучший момент: запись");
+        boolean rec = studio == null && !strike.active && !game.mode.equals("duel") && (game.state.equals("run") || game.state.equals("dying"));
+        replay.tick(Gdx.graphics.getDeltaTime(), rec);
         if (strike.active && ui.panel.isEmpty()) fpv.draw(strike.noise(), strike.T, strike.hitT, strike.camMode == 0 && strike.st.equals("fly") ? 1 : 0);
         BlackBox.mark("отрисовка интерфейса");
         if (studio == null) ui.render();
@@ -376,6 +383,11 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             {"menu", "3"}, {"oa_start", "8"}, {"oa_wave", "1.2"}, {"oa_salute", "1.2"}, {"oa_pump", "1.2"}, {"oa_clap", "1.2"}, {"oa_cheer", "1.2"},
             {"oa_hop", "0.5"}, {"oa_duck", "1.2"}, {"oa_worry", "1.2"}, {"oa_spin", "0.6"}, {"oa_walk", "0.8"}, {"oa_run", "0.8"}, {"oa_sad", "1.5"}, {"end", "0"}};
 
+    /** 3.9.0 (пункт 2): пропуск, вызов дня, рой сотни, невидимка, матка, мультикилл, лучший момент. */
+    public static final String[][] SEQ_P2 = {
+            {"menu", "3"}, {"p2_pass", "1.5"}, {"p2_chal", "1.5"}, {"p2_brief", "1"}, {"p2_play", "8"}, {"p2_swarm", "4"}, {"p2_swarm2", "3"},
+            {"p2_new", "6"}, {"p2_multi", "0.35"}, {"p2_multi2", "4"}, {"p2_over", "4"}, {"p2_gif", "6"}, {"end", "0"}};
+
     /** Проверка объектов кампании: плотина, колонна, подстанция, радар — камера смотрит на объект. */
     public static final String[][] SEQ_OBJ = {
             {"menu", "3"}, {"o_dam", "3"}, {"o_convoy", "4"}, {"o_sub", "3"}, {"o_radar", "3"}, {"end", "0"}};
@@ -392,6 +404,16 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         for (String id : ids) for (int k = 0; k < 4; k++) out.add(new String[]{"m_" + id + "_" + k, k == 0 ? "3" : "1.5"});
         out.add(new String[]{"end", "0"});
         return out.toArray(new String[0][]);
+    }
+
+    /** Отладка: навести прицел на ближайшего врага этого типа. */
+    void aimAt(String type) {
+        Game.E best = null; float bd = 1e9f;
+        for (Game.E e : game.enemies) if (e.type.equals(type) && e.pos.dst2(game.camPos) < bd) { bd = e.pos.dst2(game.camPos); best = e; }
+        if (best == null) return;
+        Vector3 d = new Vector3(best.pos).sub(game.camPos);
+        game.aimYaw = MathUtils.atan2(-d.x, -d.z);
+        game.aimPitch = MathUtils.clamp((float) Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)), -0.05f, 1.1f);
     }
 
     void lookObj() {
@@ -483,6 +505,17 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "o_convoy": game.quitBattle(); ui.debugLaunch("2-4"); break;
             case "o_sub": game.quitBattle(); ui.debugLaunch("5-2"); break;
             case "o_radar": game.quitBattle(); ui.debugLaunch("4-2"); break;
+            case "p2_pass": G.SV.bpXp = 1240; ui.show("pass"); break;
+            case "p2_chal": ui.show("chal"); break;
+            case "p2_brief": ui.debugBrief(Daily.id()); break;
+            case "p2_play": G.SV.tut = true; ui.launch("endless"); break;
+            case "p2_swarm": game.wave = 7; game.spawnSwarm(90); break;
+            case "p2_swarm2": botOn = false; game.firing = false; aimAt("gnat"); break;
+            case "p2_new": botOn = true; game.spawnEnemy("matka", ahead(160, 70)); game.spawnEnemy("phantom", ahead(200, 60)); for (int i = 0; i < 4; i++) game.spawnEnemy("quad", ahead(150, 50)); break;
+            case "p2_multi": botOn = false; game.firing = false; aimAt("matka"); { int k = 0; for (Game.E e : new Array<>(game.enemies)) if (e.type.equals("quad") && k++ < 4) game.damageEnemy(e, 1e5f, null, "gun"); } break;
+            case "p2_multi2": botOn = true; break;
+            case "p2_over": game.state = "run"; ui.show(""); forceDie(); break;
+            case "p2_gif": ui.debugSaveGif(); break;
             case "fx_fire": G.SV.night = System.getenv("SN_NIGHT") != null; G.SV.ab.put("salvo", true); ui.launch("endless"); break;
             case "fx_boom": botOn = false; game.firing = false; game.aimYaw = 0; game.aimPitch = 0.08f; game.explosion(ahead(55, 1.5f), 2f); break;
             case "fx_heat": game.heat = 0.97f; game.overheated = true; game.firing = false; game.aimPitch = 0.12f; break;
@@ -554,6 +587,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         duel.stop();
         fpv.dispose();
         rend.dispose();
+        replay.dispose();
         if (G.sfx != null) G.sfx.dispose();
     }
 }

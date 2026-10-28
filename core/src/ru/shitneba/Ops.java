@@ -124,11 +124,14 @@ public final class Ops {
     public static final class Result { public Op op; public boolean isNew, pity; public int dupe; }
 
     /** Открыть кейс: списать монеты, выбрать выигрыш, сразу сохранить (до прокрутки). null — не хватает монет. */
-    public static Result open(Case c) {
-        if (c.id.equals("free")) {
+    public static Result open(Case c) { return open(c, false); }
+
+    /** gift = кейс-подарок (награда боевого пропуска): без списания монет и без суточного лимита. */
+    public static Result open(Case c, boolean gift) {
+        if (!gift && c.id.equals("free")) {
             if (!freeReady()) return null;
             G.SV.opFree = G.today();
-        } else {
+        } else if (!gift) {
             if (G.SV.c < c.price) return null;
             G.SV.c -= c.price;
         }

@@ -13,4 +13,6 @@ public interface GameUI {
     void duelResult(boolean lostLink, boolean win, String reason);
     /** Событие для девчонки-оператора: hit, kill, boss, wave, low, lose, abil, save. */
     void opEvent(String ev);
+    /** Крупная надпись по центру (ДВОЙНОЙ!, РЕЗНЯ!, НЕБО ЧИСТО!): lvl 2..5 — сила, sub — подпись. */
+    void callout(String text, int lvl, String sub);
 }

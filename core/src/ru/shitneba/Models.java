@@ -887,6 +887,24 @@ public final class Models {
             case "relay":
                 quadBody(b, gl, rot, A, 4, c("24302a"), 1.1f); b.cyl(0.04f, 0.04f, 1.6f, 6, c("999999"), 0, 1.0f, 0); gl.torus(0.5f, 0.06f, c("2ecc71"), 0, 1.5f, 0);
                 r = 3.2f; sc = 1.6f; break;
+            case "gnat": // 3.9.0: мелочь из «роя сотни»
+                quadBody(b, gl, rot, A, 4, c("3a3f46"), 0.42f); r = 1.1f; sc = 1.15f; break;
+            case "phantom": { // 3.9.0: невидимка — видна только на радаре и при попадании
+                b.extrude(new float[][]{{-1.7f, 0}, {0.5f, 1.9f}, {1.1f, 0}, {0.5f, -1.9f}}, 0.24f, c("15181e"), 0, 0, 0, 0, 0, PI / 2);
+                b.sph(0.42f, c("20252e"), 0, 0.1f, -0.2f, 1f, 0.4f, 1.8f);
+                for (float x : S2) rot.disc(0.45f, Color.WHITE, x * 1.05f, 0.1f, 0.45f);
+                gl.sph(0.08f, new Color(0.3f, 0.9f, 1, 1), 0, -0.04f, -1.35f, 1, 1, 1, 6);
+                r = 2.2f; sc = 1.5f; break;
+            }
+            case "matka": { // 3.9.0: «матка» — чинит соседей и выпускает мелочь
+                quadBody(b, gl, rot, A, 6, c("2b3136"), 1.7f);
+                b.sph(0.95f, c("39424a"), 0, 0.35f, 0, 1.3f, 0.6f, 1.3f, 14);
+                b.box(1.6f, 0.7f, 1.2f, c("22262a"), 0, -0.75f, 0);
+                for (float x : S2) b.box(0.25f, 0.5f, 1.0f, c("1a1d20"), x * 0.95f, -0.85f, 0);
+                gl.sph(0.55f, new Color(0.3f, 1, 0.55f, 1), 0, 0.85f, 0, 1, 0.55f, 1, 12);
+                gl.torus(1.25f, 0.06f, new Color(0.3f, 1, 0.55f, 1), 0, 0.2f, 0);
+                r = 5.2f; sc = 2.1f; break;
+            }
             case "wing":
                 b.wing(4.6f, 3.2f, 0.18f, LGREY);
                 b.cyl(0.24f, 0.3f, 3.4f, 10, GREY, 0, 0.15f, 0, PI / 2, 0, 0);

@@ -518,6 +518,8 @@ public class Strike {
         bigT = 3.5f;
         G.sfx("clear");
         st = "clear"; clearT = 3.6f;
+        int pl = Pass.add(Pass.XP_STRIKE_ZONE);
+        if (pl > 0) feed("Боевой пропуск: уровень " + pl, C("ffd27a"), 0);
         Float z = G.SV.stats.get("swZone");
         if (z == null || z < zone) G.SV.stats.put("swZone", (float) zone);
     }

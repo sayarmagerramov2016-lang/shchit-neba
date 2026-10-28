@@ -21,6 +21,14 @@ public final class G {
     public static JsonValue D;
     public static Save SV;
     public static Sfx sfx;
+
+    /** Платформенные функции (Android: сохранение картинок в галерею). На ПК — null. */
+    public interface Platform {
+        /** Сохранить файл в «Картинки»; вернуть, где он теперь лежит (для подсказки игроку). */
+        String saveImage(byte[] data, String name, String mime) throws Exception;
+    }
+
+    public static Platform platform;
     public static final String[] VEHS = {"pantsir", "shilka", "tor", "luch", "grom"};
 
     public static final class Quest {
@@ -63,6 +71,10 @@ public final class G {
         public final Map<String, Integer> opXp = new LinkedHashMap<>();
         public final List<String> opAlt = new ArrayList<>();
         public int opPity, opCases;
+        // 3.9.0: вызов дня и боевой пропуск
+        public String dcDay = ""; public int dcStreak;
+        public String bpMonth = ""; public int bpXp;
+        public final List<Integer> bpGot = new ArrayList<>();
     }
 
     public static void init() {
@@ -183,6 +195,14 @@ public final class G {
                 s.opPity = op.getInt("pity", 0); s.opCases = op.getInt("cases", 0);
                 if (!s.opOwn.contains(s.opSel)) s.opSel = "";
             }
+            JsonValue dc = d.get("dc");
+            if (dc != null) { s.dcDay = dc.getString("day", ""); s.dcStreak = dc.getInt("streak", 0); }
+            JsonValue bp = d.get("bp");
+            if (bp != null) {
+                s.bpMonth = bp.getString("month", ""); s.bpXp = bp.getInt("xp", 0);
+                JsonValue gl = bp.get("got");
+                if (gl != null) for (JsonValue v = gl.child; v != null; v = v.next) s.bpGot.add(v.asInt());
+            }
             return true;
         } catch (Throwable t) {
             Gdx.app.error("save", "bad save " + f.name(), t);
@@ -248,6 +268,10 @@ public final class G {
             w.array("alt"); for (String v : s.opAlt) w.value(v); w.pop();
             w.object("xp"); for (Map.Entry<String, Integer> e : s.opXp.entrySet()) w.set(e.getKey(), e.getValue()); w.pop();
             w.set("sel", s.opSel).set("free", s.opFree).set("pity", s.opPity).set("cases", s.opCases);
+            w.pop();
+            w.object("dc").set("day", s.dcDay).set("streak", s.dcStreak).pop();
+            w.object("bp").set("month", s.bpMonth).set("xp", s.bpXp);
+            w.array("got"); for (int v : s.bpGot) w.value(v); w.pop();
             w.pop();
             w.array("top");
             for (Top t : s.top) w.object().set("s", t.s).set("w", t.w).set("d", t.d).set("t", t.t).set("v", t.v).pop();

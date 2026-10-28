@@ -22,6 +22,7 @@ import ru.shitneba.gfx.MB;
 import ru.shitneba.gfx.Mat;
 import ru.shitneba.gfx.Mesh3;
 import ru.shitneba.gfx.Node3;
+import ru.shitneba.gfx.Replay;
 
 /** Логика боя — порт game.gd (бесконечный режим). */
 public class Game {
@@ -146,7 +147,7 @@ public class Game {
         public float data; public boolean inv; public int cloak; public float heal = 2; public int split;
         public final Array<E> nodes = new Array<>(); public float anim, alt;
         public FX.Emitter smoke, trail;
-        public float ang, dir, distR; public boolean stealth; public float reveal;
+        public float ang, dir, distR; public boolean stealth, phantom; public float reveal;
         public E flock; public final Vector3 foff = new Vector3(); public E core; public float oa;
         public final Vector3 runV = new Vector3(); public boolean hasRunV; public int runI = -1; public float rt;
         public float cloakT = 6, reT = 22, shT = 6; public Node3 dome; public float flash; public boolean keep; public int id;
@@ -603,6 +604,8 @@ public class Game {
                 && R.nextFloat() < CM.getFloat("objShare", 0.5f)) e.tgt = "obj";
         if (type.equals("scout")) { e.ang = a; e.dir = R.nextFloat() < 0.5f ? -1 : 1; e.distR = rr(260, 330); }
         if (type.equals("stealth")) { e.stealth = true; e.reveal = 0; setBodyAlpha(e, 0.15f); }
+        if (type.equals("phantom")) { e.phantom = true; setBodyAlpha(e, 0f); } // видна только на радаре и вспышкой при попадании
+        if (type.equals("matka")) e.heal = 1f;
         if (type.equals("erk")) e.trail = FX.trail(md.g, false);
         if (type.equals("core") || type.equals("chimera")) spawnNodes(e, type.equals("chimera") ? 5 : 4);
         e.id = nextId++;
@@ -703,11 +706,18 @@ public class Game {
             FX.light(e.pos, 160f, 1f, 0.6f, 0.3f, 9f, 0.6f);
             G.sfx("boom2", 1f, 80);
             startKillCam(e);
+            if (replay != null) replay.event(12, G.D.get("BOSS_INFO").get(e.type).getString("short") + " СБИТ");
         }
         if (e.ground) FX.puff(tmpV.set(e.pos).add(0, 1, 0), 3f, new Color(0.1f, 0.1f, 0.1f, 1), 0.6f, 5f, 3f);
-        score += Math.round(D.getFloat("pts") * 10 * (1 + (float) Math.floor(combo / 5f) * 0.1f));
+        boolean shotKill = e.type.equals("erk") || e.type.equals("shell") || e.type.equals("node");
+        score += Math.round(D.getFloat("pts") * 10 * scoreMul());
         addCoins(D.getFloat("coin") * difCoin * (mode.equals("endless") ? 2f : 0.5f)); G.sfx("coin", 0.5f, 60);
         combo += 1; comboT = 3f; kills += 1;
+        if (!shotKill) multiKill();
+        if (!netView && !shotKill) {
+            boolean hv = e.type.equals("heavy") || e.type.equals("armor") || e.type.equals("mech") || e.type.equals("matka") || e.type.equals("phantom");
+            passXp(e.boss ? Pass.XP_BOSS : (hv ? Pass.XP_HEAVY : Pass.XP_KILL));
+        }
         if (op != null && !(e.type.equals("erk") || e.type.equals("shell") || e.type.equals("node"))) {
             boolean heavy = e.type.equals("heavy") || e.type.equals("armor") || e.type.equals("mech") || e.type.equals("walker") || e.type.equals("colossus");
             int lv = Ops.addXp(e.boss ? 15 : (heavy ? 3 : 1));
@@ -730,10 +740,52 @@ public class Game {
             if (c.nodes.size == 0) { c.inv = false; if (ui != null) ui.toast("Щит снят — бей по ядру!"); }
         }
         if (e.type.equals("core") || e.type.equals("chimera")) for (E n : new Array<>(e.nodes)) killEnemy(n);
-        boolean noWreck = e.type.equals("erk") || e.type.equals("shell") || e.type.equals("node") || e.type.equals("core") || e.type.equals("chimera") || e.type.equals("mini");
+        boolean noWreck = e.type.equals("erk") || e.type.equals("shell") || e.type.equals("node") || e.type.equals("core") || e.type.equals("chimera") || e.type.equals("mini") || e.type.equals("gnat");
         if (!e.ground && !noWreck) makeWreck(e, sz);
         else if (e.type.equals("mini") && R.nextFloat() < 0.5f) makeWreck(e, sz);
         removeEnemy(e);
+    }
+
+    // ---------- 3.9.0: серии, мультикиллы, боевой пропуск ----------
+    /** «Лучший момент» (запись кадров ведёт ShieldGame, сюда — только события). */
+    public Replay replay;
+    float multiT; int multiN;
+    static final String[] MULTI = {"", "", "ДВОЙНОЙ!", "ТРОЙНОЙ!", "ЧЕТВЕРНОЙ!"};
+
+    /** Множитель очков от серии: +10% за каждые 5 сбитых подряд, не больше ×3. */
+    public float scoreMul() { return Math.min(3f, 1f + (float) Math.floor(combo / 5f) * 0.1f); }
+
+    /** Несколько сбитых почти разом — надпись и бонус. */
+    void multiKill() {
+        multiN = multiT > 0 ? multiN + 1 : 1;
+        multiT = 0.9f;
+        if (multiN < 2) return;
+        int bonus = 40 * multiN * multiN;
+        score += bonus;
+        String t = multiN < MULTI.length ? MULTI[multiN] : (multiN >= 8 ? "МЯСОРУБКА!" : "РЕЗНЯ!");
+        if (ui != null) ui.callout(t, Math.min(4, multiN), "+" + bonus);
+        if (multiN >= 5) statMax("multiBest", multiN);
+        if (replay != null && multiN >= 3) replay.event(multiN, t);
+    }
+
+    /** Опыт боевого пропуска (только за свои бои, не за зрителя дуэли). */
+    void passXp(int n) {
+        int lv = Pass.add(n);
+        if (lv > 0 && ui != null) ui.toast("Боевой пропуск: уровень " + lv + "! Забери награду в меню");
+    }
+
+    /** «Рой сотни»: облако мелких дронов вокруг ведущего. */
+    void spawnSwarm(int n) {
+        if (G.isMobile()) n = Math.round(n * 0.6f);
+        E lead = spawnEnemy("gnat", null, rr(-0.9f, 0.9f), rr(480, 540));
+        for (int i = 1; i < n; i++) {
+            E m = spawnEnemy("gnat", lead.pos.cpy().add(rr(-20, 20), rr(-8, 12), rr(-20, 20)));
+            m.flock = lead;
+            float a = R.nextFloat() * MathUtils.PI2, r = 4 + (float) Math.sqrt(R.nextFloat()) * 22;
+            m.foff.set(MathUtils.cos(a) * r, rr(-7, 9), MathUtils.sin(a) * r);
+        }
+        if (ui != null) { ui.callout("РОЙ!", 4, n + " целей"); ui.comm("lisa", "Огромный рой! Зенитные разрывы и очереди по центру!"); }
+        G.sfx("alarm", 0.7f, 900);
     }
 
     /** Замедление и облёт камерой вокруг падающего босса. */
@@ -798,6 +850,7 @@ public class Game {
 
     void updateJuice(float dt) {
         hitMark = Math.max(0, hitMark - dt);
+        multiT = Math.max(0, multiT - dt);
         if (boltT > 0) { boltT -= dt; if (boltT <= 0) bolts.clear(); }
         for (int i = dmgNums.size - 1; i >= 0; i--) {
             DmgNum n = dmgNums.get(i);
@@ -825,6 +878,14 @@ public class Game {
             if (ui != null && R.nextFloat() < 0.5f) ui.comm("lisa", "Стая! Бей очередью в центр!");
             return;
         }
+        if (t.equals("gnats")) { spawnSwarm(30); return; }
+        if (t.equals("matka")) {
+            for (E o : enemies) if (o.type.equals("matka")) { spawnEnemy("heavy"); return; } // одна матка за раз
+            spawnEnemy("matka");
+            if (ui != null) ui.comm("lisa", "«Матка»! Чинит всех вокруг — сбивай её первой!");
+            return;
+        }
+        if (t.equals("phantom") && ui != null && R.nextFloat() < 0.3f) ui.comm("lisa", "Невидимка! На экране её нет — смотри радар и бери захват!");
         if (t.equals("swarm")) {
             E base = spawnEnemy("mini", null, rr(-1, 1), Float.NaN);
             for (int i = 0; i < 4; i++) spawnEnemy("mini", base.pos.cpy().add(rr(-10, 10), rr(-5, 5), rr(-10, 10)));
@@ -927,10 +988,10 @@ public class Game {
             Vector3 faceDir = null;
             String ty = e.type;
             switch (ty) {
-                case "quad": case "mini": case "decoy": case "zig": case "split": {
+                case "quad": case "mini": case "gnat": case "phantom": case "decoy": case "zig": case "split": {
                     if (!e.phase.equals("dive")) {
                         want.set(to.x, 0, to.z).nor().scl(sp);
-                        float ca = (ty.equals("mini") ? 28f : 38f) + MathUtils.sin(e.t) * 8;
+                        float ca = (ty.equals("mini") || ty.equals("gnat") ? 28f : 38f) + MathUtils.sin(e.t) * 8;
                         want.y = (height(e.pos.x, e.pos.z) + ca - e.pos.y) * 0.6f;
                         tA.set(-to.z, 0, to.x).nor();
                         want.mulAdd(tA, ty.equals("zig") ? MathUtils.cos(e.t * 3.2f) * sp * 1.1f : MathUtils.cos(e.t * 1.7f) * 3f);
@@ -976,6 +1037,29 @@ public class Game {
                             }
                     }
                     e.g.rotateY(dt * 0.5f);
+                    break;
+                }
+                case "matka": {
+                    // держится на 230 м, чинит всех в радиусе 110 м и выпускает мелочь
+                    tA.set(to.x, 0, to.z).nor().scl(-230f).add(Tt);
+                    want.set(tA.x - e.pos.x, 0, tA.z - e.pos.z).limit(Math.max(sp, 14f));
+                    want.y = (height(e.pos.x, e.pos.z) + 85 - e.pos.y) * 0.5f;
+                    e.vel.lerp(want, 1 - (float) Math.exp(-dt * 0.8f));
+                    e.heal -= dt; e.spawnT -= dt;
+                    if (e.heal <= 0 && empT <= 0) {
+                        e.heal = 0.8f;
+                        for (E o : enemies)
+                            if (o != e && !o.boss && o.hp > 0 && o.hp < o.max && o.pos.dst(e.pos) < 110 && !(o.type.equals("shell") || o.type.equals("erk"))) {
+                                o.hp = Math.min(o.max, o.hp + Math.max(1f, o.max * 0.12f));
+                                healBeam(e.pos, o.pos);
+                            }
+                        if (e.hp < e.max) e.hp = Math.min(e.max, e.hp + 0.6f);
+                    }
+                    if (e.spawnT <= 0 && empT <= 0) {
+                        e.spawnT = 7f;
+                        for (int k = 0; k < 4; k++) { E m = spawnEnemy("gnat", e.pos.cpy().add(rr(-4, 4), -4, rr(-4, 4))); m.vel.set(rr(-8, 8), -6, rr(-8, 8)); }
+                    }
+                    e.g.rotateY(dt * 0.3f);
                     break;
                 }
                 case "scout": {
@@ -1557,8 +1641,25 @@ public class Game {
         beamUsed = used;
     }
 
+    /** Зелёные лучи ремонта от «матки» (x1,y1,z1,x2,y2,z2,жизнь). */
+    final Array<float[]> heals = new Array<>();
+
+    void healBeam(Vector3 a, Vector3 b) {
+        if (heals.size > 24) heals.removeIndex(0);
+        heals.add(new float[]{a.x, a.y, a.z, b.x, b.y, b.z, T + 0.35f});
+        FX.glow(b, 3f, HEAL_C, 0.25f);
+    }
+
+    static final Color HEAL_C = new Color(0.3f, 1, 0.5f, 1);
+
     void fillBeams() {
         beamDyn.clear();
+        for (int i = heals.size - 1; i >= 0; i--) {
+            float[] h = heals.get(i);
+            float k = (h[6] - T) / 0.35f;
+            if (k <= 0) { heals.removeIndex(i); continue; }
+            cylBetween(beamDyn, h[0], h[1], h[2], h[3], h[4], h[5], 0.22f, new float[]{0.25f, 1, 0.45f, k * 0.7f});
+        }
         long ms = System.currentTimeMillis();
         for (int i = 0; i < beamUsed; i++) {
             float[] q = beams.get(i);
@@ -1791,7 +1892,7 @@ public class Game {
         for (Wreck w : wrecks) w.g.remove();
         wrecks.clear(); dmgNums.clear(); hitMark = 0; beamUsed = 0;
         for (Rocket r : rockets) { r.node.remove(); r.trail.stop(); }
-        rockets.clear(); bullets.clear(); ebul.clear(); bosses.clear(); timers.clear(); bolts.clear();
+        rockets.clear(); bullets.clear(); ebul.clear(); bosses.clear(); timers.clear(); bolts.clear(); heals.clear(); multiT = 0; multiN = 0;
         lock.t = null; killCamT = 0; killNode = null; recoil = 0; quake = 0; stormLeft = 0;
         if (obj != null) for (Objs.Obj m : obj.models) m.g.remove();
         obj = null;
@@ -1805,9 +1906,11 @@ public class Game {
     public void startGame(String m, JsonValue def) {
         BlackBox.log("старт боя: " + m + (def != null ? " " + def.getString("id", "") : "") + " · " + G.SV.veh);
         clearBattle();
+        if (replay != null) replay.reset();
         mode = m;
         CM = m.equals("campaign") ? def : null;
         VEH = G.SV.veh;
+        if (CM != null && CM.has("veh")) VEH = CM.getString("veh"); // вызов дня задаёт машину сам
         if (hasMod("missilesOnly") && (VEH.equals("shilka") || VEH.equals("luch") || VEH.equals("grom"))) VEH = "pantsir";
         RUN = null;
         if (m.equals("endless")) {
@@ -1903,6 +2006,11 @@ public class Game {
         if (ui != null) ui.banner("Волна " + wave, bossWave, bossWave ? G.D.get("BOSS_INFO").get(bossTypeForWave()).getString("name") : "");
         G.sfx(bossWave ? "boss" : "wave"); opEv("wave");
         qProg("wave", wave, true); statMax("bestWave", wave);
+        // с 7-й волны иногда налетает «рой сотни»
+        if (wave >= 7 && !bossWave && R.nextFloat() < 0.35f) {
+            final int w0 = wave;
+            later(rr(5f, 9f), () -> { if (state.equals("run") && wave == w0) spawnSwarm(Math.min(100, 50 + wave * 3)); });
+        }
     }
 
     Map<String, Float> endlessMix() {
@@ -1918,6 +2026,8 @@ public class Game {
         if (w >= 6) m.put("flock", 0.6f);
         if (w >= 8) m.put("stealth", 0.8f);
         if (w >= 10) m.put("armor", 0.7f);
+        if (w >= 9) m.put("phantom", 0.6f);
+        if (w >= 11) m.put("matka", 0.3f);
         return m;
     }
 
@@ -1982,7 +2092,12 @@ public class Game {
         }
         int left = liveNonShots();
         if (toSpawn <= 0 && squads <= 0 && scoutQ <= 0 && left == 0) {
-            if (!waveHit) { statAdd("nohit", 1); nohitWaves += 1; qProg("nohit", nohitWaves, true); } else nohitWaves = 0;
+            if (!waveHit) {
+                statAdd("nohit", 1); nohitWaves += 1; qProg("nohit", nohitWaves, true);
+                score += 300 * wave;
+                if (ui != null) ui.callout("НЕБО ЧИСТО!", 5, "+" + 300 * wave + " · волна без урона");
+            } else nohitWaves = 0;
+            passXp(Pass.XP_WAVE);
             if (mode.equals("campaign") && wave >= CM.get("waves").size) { missionComplete(); return; }
             between = 3.5f; hp = Math.min(st("maxHp"), hp + st("regen"));
             int bonus = 0;
@@ -2072,7 +2187,10 @@ public class Game {
         int reward;
         String special = CM.getString("special", "");
         int rw = CM.getInt("reward");
-        if (special.equals("chal")) {
+        if (special.equals("daily")) {
+            reward = Daily.complete();
+            if (reward > 0) { statAdd("daily", 1); passXp(Pass.XP_DAILY); }
+        } else if (special.equals("chal")) {
             Integer pc = G.SV.chal.get(id);
             int pv = pc == null ? 0 : pc;
             reward = pv > 0 ? Math.round(rw * 0.25f) : rw;
@@ -2083,6 +2201,7 @@ public class Game {
             G.SV.camp.put(id, Math.max(prev, got));
         }
         G.SV.c += reward;
+        passXp(Pass.XP_MISSION);
         if (CM.getBoolean("final", false) && !G.SV.skOwn.contains("aurum")) G.SV.skOwn.add("aurum");
         if (CM.has("skin") && !G.SV.skOwn.contains(CM.getString("skin"))) G.SV.skOwn.add(CM.getString("skin"));
         xpGot = Math.max(5, Math.round(score / 150f)) + got * 5;

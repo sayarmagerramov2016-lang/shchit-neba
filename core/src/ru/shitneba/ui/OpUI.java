@@ -571,7 +571,19 @@ public class OpUI {
     int lastTick = -1;
     float stripJit;
 
+    /** Кейс в подарок (награда боевого пропуска): рулетка без оплаты, назад — в пропуск. */
+    public void startRollGift(Ops.Case c) {
+        Ops.Result r = Ops.open(c, true);
+        rollCase = c; res = r; strip = Ops.strip(c, r.op); rollT = 0; lastTick = -1; gift = true;
+        stripJit = MathUtils.random(-0.35f, 0.35f);
+        u.backTo.put("oproll", "pass");
+        u.show("oproll");
+    }
+
+    boolean gift;
+
     void startRoll(Ops.Case c) {
+        gift = false;
         Ops.Result r = Ops.open(c);
         if (r == null) { u.toast(c.id.equals("free") ? "Подарок уже открыт — завтра будет новый" : "Не хватает монет"); return; }
         rollCase = c; res = r; strip = Ops.strip(c, r.op); rollT = 0; lastTick = -1;
@@ -653,7 +665,7 @@ public class OpUI {
         }
         boolean isSel = o.id.equals(G.SV.opSel);
         if (u.button(cx + 18 + bw, by, bw, 36, isSel ? "Выбрана" : "Выбрать", UI.NORMAL, !isSel, 13)) { G.SV.opSel = o.id; G.save(); u.toast(o.name + " — твой оператор"); }
-        if (u.button(cx + 24 + bw * 2, by, bw, 36, "Готово", UI.BIG, true, 14)) u.show("ops");
+        if (u.button(cx + 24 + bw * 2, by, bw, 36, "Готово", UI.BIG, true, 14)) u.show(gift ? "pass" : "ops");
     }
 
     // ---------- магазин и коллекция ----------

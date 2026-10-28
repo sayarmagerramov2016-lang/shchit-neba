@@ -20,11 +20,15 @@ import java.util.List;
 import java.util.Map;
 
 import ru.shitneba.BlackBox;
+import ru.shitneba.Daily;
 import ru.shitneba.Duel;
 import ru.shitneba.G;
 import ru.shitneba.Game;
 import ru.shitneba.GameUI;
+import ru.shitneba.Ops;
+import ru.shitneba.Pass;
 import ru.shitneba.Strike;
+import ru.shitneba.gfx.Replay;
 import ru.shitneba.gfx.Tex;
 
 /** Интерфейс: меню-«тактический терминал», панели и боевой HUD. */
@@ -92,7 +96,7 @@ public class UI implements GameUI, InputProcessor {
         op = new OpUI(this);
         DESK = !G.isMobile() && System.getenv("SN_PHONE") == null; // SN_PHONE=1 — интерфейс как на телефоне (для скриншотов магазина)
         String[][] bt = {{"endless", "menu"}, {"garage", "menu"}, {"shop", "menu"}, {"settings", "menu"}, {"about", "menu"},
-                {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}, {"ops", "menu"}};
+                {"quests", "menu"}, {"ach", "menu"}, {"records", "menu"}, {"campaign", "menu"}, {"chal", "menu"}, {"brief", "campaign"}, {"swarm", "menu"}, {"duel", "menu"}, {"ops", "menu"}, {"pass", "menu"}};
         for (String[] b : bt) backTo.put(b[0], b[1]);
     }
 
@@ -121,7 +125,77 @@ public class UI implements GameUI, InputProcessor {
 
     @Override public void opEvent(String ev) { op.event(ev); }
 
+    // ---------- 3.9.0: крупные надписи (мультикиллы, «НЕБО ЧИСТО!», «РОЙ!») ----------
+    String callS = "", callSub = ""; float callT; int callLvl;
+    static final float CALL_DUR = 1.4f;
+    static final Color[] CALL_C = {C("ffffff"), C("ffffff"), C("ffe08a"), C("ffb03a"), C("ff5a3c"), C("5ff0c8")};
+
+    @Override public void callout(String t, int lvl, String sub) {
+        if (callT > 0 && lvl < callLvl && callS.equals("НЕБО ЧИСТО!")) return;
+        callS = t; callSub = sub == null ? "" : sub; callLvl = Math.max(0, Math.min(5, lvl)); callT = CALL_DUR;
+        G.sfx(lvl >= 4 ? "boss" : "lock", lvl >= 4 ? 0.35f : 0.5f, 120);
+    }
+
+    void drawCallout(float W, float H) {
+        if (callT <= 0) return;
+        float age = CALL_DUR - callT;
+        float pop = Math.min(1, age / 0.12f), a = MathUtils.clamp(callT / 0.35f, 0, 1);
+        float size = (26 + callLvl * 4) * (1.6f - 0.6f * Interp(pop));
+        Color c = CALL_C[callLvl];
+        float y = H * 0.3f;
+        d.text(callS, W / 2 + 2.5f, y + 2.5f, size, new Color(0, 0, 0, 0.6f * a), Draw.TITLE, 0);
+        d.text(callS, W / 2, y, size, new Color(c.r, c.g, c.b, a), Draw.TITLE, 0);
+        if (!callSub.isEmpty()) {
+            d.text(callSub, W / 2 + 1.5f, y + 24 + 1.5f, 16, new Color(0, 0, 0, 0.6f * a), Draw.BOLD, 0);
+            d.text(callSub, W / 2, y + 24, 16, new Color(1, 1, 1, 0.9f * a), Draw.BOLD, 0);
+        }
+    }
+
     public final OpUI op;
+    public Replay replay;
+    boolean gifBusy;
+
+    /** 3.9.0: ролик «лучший момент» в окне итога + кнопка «Сохранить гифку». */
+    void replayBox() {
+        if (replay == null || replay.best == null) return;
+        float w = Math.min(cw, 384), h = w * Replay.H / Replay.W, x = cx + (cw - w) / 2;
+        if (!d.off) {
+            d.text("ЛУЧШИЙ МОМЕНТ" + (replay.bestName.isEmpty() ? "" : " · " + replay.bestName), cx + cw / 2, cy + 14, 13, C_ACC, Draw.WIDE, 0);
+            Texture t = replay.frame(panelT);
+            if (t != null) { d.b.setColor(Color.WHITE); d.b.draw(t, x, cy + 22, w, h, 0, 0, 1, 1); }
+            d.frame(x, cy + 22, w, h, 1, C_ACC, 0.6f);
+        }
+        cy += 22 + h + 8;
+        if (btn(gifBusy ? "Сохраняю…" : "Сохранить гифку", 38, NORMAL, !gifBusy)) saveGif();
+    }
+
+    /** Для автотеста. */
+    public void debugSaveGif() { if (replay != null && replay.best != null) saveGif(); }
+
+    void saveGif() {
+        gifBusy = true;
+        final String name = "ShchitNeba3D_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(new java.util.Date()) + ".gif";
+        Thread t = new Thread(() -> {
+            String msg;
+            try {
+                byte[] gif = replay.gif();
+                if (G.platform != null) msg = "Гифка сохранена: " + G.platform.saveImage(gif, name, "image/gif");
+                else {
+                    com.badlogic.gdx.files.FileHandle f = Gdx.files.local("gif/" + name);
+                    f.writeBytes(gif, false);
+                    msg = "Гифка сохранена: " + f.file().getAbsolutePath();
+                }
+                BlackBox.log("гифка " + name + " · " + gif.length / 1024 + " КБ");
+            } catch (Throwable e) {
+                msg = "Не удалось сохранить гифку";
+                BlackBox.log("гифка не сохранилась: " + e);
+            }
+            final String m = msg;
+            Gdx.app.postRunnable(() -> { gifBusy = false; toast(m); });
+        }, "gif");
+        t.setDaemon(true);
+        t.start();
+    }
 
     @Override public void over(boolean rec) { overRec = rec; overDelay = 0.5f; }
 
@@ -161,7 +235,7 @@ public class UI implements GameUI, InputProcessor {
     void toMenu() {
         clearComm();
         final boolean wasCamp = g.mode.equals("campaign") && g.CM != null;
-        final boolean wasChal = wasCamp && "chal".equals(g.CM.getString("special", ""));
+        final boolean wasChal = wasCamp && isChal(g.CM);
         g.quitBattle();
         pending = () -> {
             host.toMenuWorld();
@@ -229,6 +303,7 @@ public class UI implements GameUI, InputProcessor {
         deskMouse();
         keyAim(dt);
         if (toastT > 0) toastT -= dt;
+        if (callT > 0) callT -= dt;
         if (commT > 0) { commT -= dt; if (commT <= 0) commNext(); }
         bannerT = Math.max(0, bannerT - dt); hintT = Math.max(0, hintT - dt);
         if (overDelay > 0) { overDelay -= dt; if (overDelay <= 0) { overDelay = -1; show("over"); } }
@@ -294,6 +369,7 @@ public class UI implements GameUI, InputProcessor {
             case "duel": pDuel(); break;
             case "dres": pDRes(); break;
             case "ops": op.pOps(); break;
+            case "pass": pPass(); break;
             case "oproll": op.pRoll(); break;
             default: break;
         }
@@ -716,7 +792,8 @@ public class UI implements GameUI, InputProcessor {
         py += ph + gp;
         if (menuPlate(px, py, RW, ph, false, "endless_infinity_icon", "Бесконечный бой", "Волны без конца · рекорд " + G.SV.best)) show("endless");
         py += ph + gp;
-        if (menuPlate(px, py, RW, ph, false, "challenges_star_badge_icon", "Испытания", "Особые задачи на время")) show("chal");
+        if (menuPlate(px, py, RW, ph, false, "challenges_star_badge_icon", "Испытания", Daily.doneToday() ? "Особые задачи · вызов дня пройден" : "Вызов дня ждёт!")) show("chal");
+        if (!Daily.doneToday() && !d.off) d.circle(px + RW - 34, py + ph * 0.3f, 5 + 1.5f * MathUtils.sin(T * 5), C_ACC, 0.9f);
         py += ph + gp;
         if (menuPlate(px, py, RW, ph, false, "swarm_drones_icon", "Рой", "Новое · дрон-камикадзе")) show("swarm");
         py += ph + gp;
@@ -727,17 +804,20 @@ public class UI implements GameUI, InputProcessor {
         // --- нижний ряд слева ---
         float lw = px - m - 16, sh = 46;
         int qn = questsReady();
-        String[] nm = {"Операторы", "Задания", "Достижения", "Рекорды", "Улучшения"};
-        String[] ic = {"star_icon", "missions_clipboard_icon", "achievements_trophy_icon", "records_chart_icon", "coin_icon"};
-        float sgp = 7, sw = (lw - sgp * 4) / 5, sy = d.h - m - sh;
-        for (int i = 0; i < 5; i++) {
+        String[] nm = {"Операторы", "Пропуск", "Задания", "Достижения", "Рекорды", "Улучшения"};
+        String[] ic = {"star_icon", "shield_emblem_icon", "missions_clipboard_icon", "achievements_trophy_icon", "records_chart_icon", "coin_icon"};
+        int nb = nm.length;
+        float sgp = 6, sw = (lw - sgp * (nb - 1)) / nb, sy = d.h - m - sh;
+        int pr = Pass.ready();
+        for (int i = 0; i < nb; i++) {
             float x = m + i * (sw + sgp);
             if (smallPlate(x, sy, sw, sh, ic[i], nm[i])) {
                 switch (i) {
                     case 0: show("ops"); break;
-                    case 1: show("quests"); break;
-                    case 2: show("ach"); break;
-                    case 3: show("records"); break;
+                    case 1: show("pass"); break;
+                    case 2: show("quests"); break;
+                    case 3: show("ach"); break;
+                    case 4: show("records"); break;
                     default: shopVeh = -1; backTo.put("shop", "menu"); show("shop"); break;
                 }
             }
@@ -746,10 +826,11 @@ public class UI implements GameUI, InputProcessor {
                 kit.img("notification_badge", x + sw - bsz * 0.75f, sy - bsz * 0.3f, bsz, bsz);
                 d.text("1", x + sw - bsz * 0.25f, sy + bsz * 0.2f + 4, 11, WHITE, Draw.BOLD, 0);
             }
-            if (i == 1 && qn > 0 && !d.off) {
+            int badge = i == 1 ? pr : (i == 2 ? qn : 0);
+            if (badge > 0 && !d.off) {
                 float bsz = 20 + 2 * MathUtils.sin(T * 5);
                 kit.img("notification_badge", x + sw - bsz * 0.75f, sy - bsz * 0.3f, bsz, bsz);
-                d.text(String.valueOf(qn), x + sw - bsz * 0.25f, sy + bsz * 0.2f + 4, 11, WHITE, Draw.BOLD, 0);
+                d.text(String.valueOf(badge), x + sw - bsz * 0.25f, sy + bsz * 0.2f + 4, 11, WHITE, Draw.BOLD, 0);
             }
         }
 
@@ -846,6 +927,7 @@ public class UI implements GameUI, InputProcessor {
             } else {
                 for (JsonValue s = G.D.get("SK_TR").child; s != null; s = s.next) {
                     final String id = s.name;
+                    if (s.getBoolean("hidden", false) && !G.SV.skOwn.contains(id)) continue;
                     boolean own = G.SV.skOwn.contains(id), sel = G.SV.skTr.equals(id);
                     final int cost = s.getInt("cost");
                     Card c = card(s.getString("name"), "", own ? (sel ? "Выбран" : "Выбрать") : "Купить · " + cost,
@@ -974,7 +1056,9 @@ public class UI implements GameUI, InputProcessor {
                 }
                 String bt = q.cl ? "Получено" : (q.done ? "Забрать +" + (int) q.r : "+" + (int) q.r);
                 if (button(cx + cw - 164, cy + 13, 150, 40, bt, BUY, ready, 0)) {
-                    q.cl = true; G.SV.c += (int) q.r; G.sfx("coin"); G.save(); toast("+" + (int) q.r + " монет");
+                    q.cl = true; G.SV.c += (int) q.r; G.sfx("coin");
+                    int pl = Pass.add(Pass.XP_QUEST);
+                    G.save(); toast("+" + (int) q.r + " монет · +" + Pass.XP_QUEST + " опыта пропуска" + (pl > 0 ? " · уровень " + pl + "!" : ""));
                 }
                 if (q.cl && !d.off) d.check(cx + cw - 150, cy + 33, 6, 2.5f, C_GREEN, 1);
                 cy += h + 8;
@@ -982,7 +1066,12 @@ public class UI implements GameUI, InputProcessor {
         });
     }
 
-    static boolean achHidden(String st) { return st.equals("coop") || st.equals("daily"); }
+    static boolean achHidden(String st) { return st.equals("coop"); }
+
+    /** Испытание или вызов дня (у них общий экран и возврат в «Испытания»). */
+    static boolean isChal(JsonValue m) { String s = m.getString("special", ""); return s.equals("chal") || s.equals("daily"); }
+
+    static boolean isDaily(JsonValue m) { return "daily".equals(m.getString("special", "")); }
 
     void pAch() {
         frame("ach", 920, false, true, () -> {
@@ -1149,6 +1238,7 @@ public class UI implements GameUI, InputProcessor {
                     label(String.format("Новое звание: %s!  +%d монет", G.RANK_N[g.rankUp], 100 * g.rankUp), 18, C_ACC, Draw.TITLE, 0);
                 }
             }
+            replayBox();
             int r = btnRow(new String[]{"Ещё раз", "Меню"}, new int[]{BIG, NORMAL}, null, 48);
             if (r == 0) { g.rankUp = -1; clearComm(); g.quitBattle(); launch("endless"); }
             else if (r == 1) { g.rankUp = -1; toMenu(); }
@@ -1248,6 +1338,8 @@ public class UI implements GameUI, InputProcessor {
 
     /** Отладка: найти миссию или испытание по id. */
     public JsonValue findMission(String id) {
+        if (id.equals(Daily.id())) return Daily.today();
+        if (id.equals(Daily.id())) return Daily.today();
         for (JsonValue c = chapters().child; c != null; c = c.next)
             for (JsonValue m = c.get("missions").child; m != null; m = m.next) if (m.getString("id").equals(id)) return m;
         for (JsonValue m = G.D.get("CHALLENGES").child; m != null; m = m.next) if (m.getString("id").equals(id)) return m;
@@ -1277,7 +1369,7 @@ public class UI implements GameUI, InputProcessor {
 
     void openBrief(JsonValue m) {
         curMission = m;
-        boolean chal = "chal".equals(m.getString("special", ""));
+        boolean chal = isChal(m);
         backTo.put("brief", chal ? "chal" : "campaign");
         show("brief");
     }
@@ -1396,7 +1488,7 @@ public class UI implements GameUI, InputProcessor {
         final JsonValue m = curMission;
         if (m == null) { show("campaign"); return; }
         frame("brief", 660, false, true, () -> {
-            boolean chal = "chal".equals(m.getString("special", ""));
+            boolean chal = isChal(m);
             d.text(chal ? "ИСПЫТАНИЕ" : "МИССИЯ " + m.getString("id"), cx + cw / 2, cy + 14, 14, C_ACC, Draw.WIDE, 0);
             cy += 22;
             title(m.getString("title"));
@@ -1408,7 +1500,7 @@ public class UI implements GameUI, InputProcessor {
                 JsonValue M = G.D.get("MODS").get(md.asString());
                 if (M != null) label("•  " + M.getString("name") + ": " + M.getString("desc"), 14, C("ffb0a0"));
             }
-            Integer pvI = chal ? G.SV.chal.get(m.getString("id")) : G.SV.camp.get(m.getString("id"));
+            Integer pvI = isDaily(m) ? (Daily.doneToday() ? 3 : 0) : chal ? G.SV.chal.get(m.getString("id")) : G.SV.camp.get(m.getString("id"));
             int prev = pvI == null ? 0 : pvI;
             section("Звёзды");
             JsonValue st = m.get("stars");
@@ -1419,7 +1511,8 @@ public class UI implements GameUI, InputProcessor {
             }
             gap(2);
             int rw = m.getInt("reward");
-            label(String.format("Награда: %d монет%s", prev == 0 ? rw : Math.round(rw * 0.25f), prev == 0 ? "" : (chal ? " (повторное прохождение)" : " (за новые звёзды — бонус)")), 13, C_ACC, Draw.BOLD, -1);
+            if (isDaily(m)) label(Daily.doneToday() ? "Сегодня награда уже получена — можно переиграть ради рекорда" : String.format("Награда: %d монет + 150 опыта пропуска · серия дней: %d", Daily.reward(), Daily.streak()), 13, C_ACC, Draw.BOLD, -1);
+            else label(String.format("Награда: %d монет%s", prev == 0 ? rw : Math.round(rw * 0.25f), prev == 0 ? "" : (chal ? " (повторное прохождение)" : " (за новые звёзды — бонус)")), 13, C_ACC, Draw.BOLD, -1);
             if (btn("В бой", 50, BIG, true)) launchMission(m);
         });
     }
@@ -1428,7 +1521,7 @@ public class UI implements GameUI, InputProcessor {
         final JsonValue m = g.resM;
         if (m == null) { show("menu"); return; }
         frame("result", 560, false, true, () -> {
-            boolean chal = "chal".equals(m.getString("special", ""));
+            boolean chal = isChal(m);
             boolean win = g.resWin;
             title(chal ? (win ? "Испытание пройдено" : "Испытание провалено") : (win ? "Миссия выполнена" : "Миссия провалена"));
             d.text(chal ? m.getString("title") : m.getString("id") + " · " + m.getString("title"), cx + cw / 2, cy + 14, 14, C_MUT, Draw.MAIN, 0);
@@ -1471,6 +1564,7 @@ public class UI implements GameUI, InputProcessor {
                 label(g.resReason, 16, C("ff8a7a"), Draw.BOLD, 0);
                 label(g.hasMod("noUpg") ? "Здесь улучшения не работают — только точность и способности." : "Совет: загляни в «Улучшения» — прокачка из меню действует и здесь.", 13, C_MUT, Draw.MAIN, 0);
             }
+            replayBox();
             int r = btnRow(new String[]{"Повторить", chal ? "К испытаниям" : "К миссиям"}, new int[]{win ? NORMAL : BIG, NORMAL}, null, 44);
             if (r == 0) { g.rankUp = -1; clearComm(); g.quitBattle(); launchMission(m); }
             else if (r == 1) { g.rankUp = -1; toMenu(); }
@@ -1484,6 +1578,7 @@ public class UI implements GameUI, InputProcessor {
             int done = 0;
             for (JsonValue c = list.child; c != null; c = c.next) { Integer v = G.SV.chal.get(c.getString("id")); if (v != null && v > 0) done++; }
             label(String.format("Особые бои с жёсткими условиями · пройдено %d из %d", done, list.size), 13, C_MUT, Draw.MAIN, 0);
+            dailyCard();
             int cols = Math.max(1, Math.min(3, (int) (cw / 260)));
             float gp = 8, w = (cw - gp * (cols - 1)) / cols;
             for (int i0 = 0; i0 < list.size; i0 += cols) {
@@ -1520,6 +1615,69 @@ public class UI implements GameUI, InputProcessor {
                 cy += rowH + gp;
             }
         });
+    }
+
+    /** 3.9.0: боевой пропуск — 30 уровней, награды забираются вручную, сброс раз в месяц. */
+    void pPass() {
+        frame("pass", 920, false, true, () -> {
+            title("Боевой пропуск");
+            int lv = Pass.level();
+            label(String.format("Уровень %d из %d · сброс через %d дн. · всё бесплатно — опыт идёт за сбитых, волны, миссии, задания и вызов дня",
+                    lv, Pass.LEVELS, Pass.daysLeft()), 13, C_MUT, Draw.MAIN, 0);
+            if (!d.off) {
+                bar(cx, cy, cw, 8, (lv + Pass.levelK()) / Pass.LEVELS, C_ACC);
+                d.text(lv >= Pass.LEVELS ? "Пропуск пройден!" : String.format("до уровня %d: %d опыта", lv + 1, Pass.XP_LV - G.SV.bpXp % Pass.XP_LV), cx + cw, cy + 26, 12, C_ACC, Draw.BOLD, 1);
+            }
+            cy += 36;
+            int cols = Math.max(2, Math.min(6, (int) (cw / 140)));
+            float gp = 6, w = (cw - gp * (cols - 1)) / cols, h = 104;
+            for (int i = 0; i < Pass.LEVELS; i++) {
+                final int L = i + 1;
+                float x = cx + (i % cols) * (w + gp), y = cy + (i / cols) * (h + gp);
+                Pass.Reward r = Pass.reward(L);
+                boolean got = Pass.got(L), can = Pass.canClaim(L), big = !r.kind.equals("coins");
+                if (!d.off) {
+                    Color bc = can ? C_ACC : (big ? C_BOSS : C_LINE);
+                    box(x, y, w, h, can ? C_ACC : WHITE, can ? 0.12f : (L <= lv ? 0.06f : 0.03f), bc, can ? 1 : (big ? 0.7f : 0.25f), can ? 2 : 1);
+                    d.text(String.valueOf(L), x + 10, y + 22, 18, L <= lv ? C_ACC : C_MUT, Draw.TITLE, -1);
+                    String t = r.kind.equals("coins") ? "+" + r.n + " монет" : r.name + (r.n > 0 ? " и +" + r.n + " монет" : "");
+                    d.wrap(t, x + 10, y + 30, w - 20, 12, big ? C("e6d2ff") : C_TXT, Draw.BOLD, -1);
+                    if (got) d.check(x + w - 20, y + 16, 6, 2.5f, C_GREEN, 1);
+                }
+                if (can && button(x + 8, y + h - 38, w - 16, 30, "Забрать", BUY, true, 13)) {
+                    Ops.Case c = Pass.claim(L);
+                    G.sfx("coin");
+                    if (c != null) op.startRollGift(c); else toast("Награда за уровень " + L + " получена");
+                } else if (!can && !got && !d.off) d.text(L <= lv ? "" : "закрыто", x + w / 2, y + h - 16, 11, C_MUT, Draw.MAIN, 0);
+            }
+            cy += ((Pass.LEVELS + cols - 1) / cols) * (h + gp) + 4;
+        });
+    }
+
+    /** 3.9.0: карточка «Вызов дня» вверху «Испытаний». */
+    void dailyCard() {
+        final JsonValue m = Daily.today();
+        boolean done = Daily.doneToday();
+        float h = 122, x = cx, y = cy, w = cw;
+        StringBuilder mods = new StringBuilder();
+        for (JsonValue md = m.get("mods").child; md != null; md = md.next) {
+            JsonValue M = G.D.get("MODS").get(md.asString());
+            mods.append(mods.length() > 0 ? " · " : "").append(M != null ? M.getString("name") : md.asString());
+        }
+        if (!d.off) {
+            float p = done ? 0.06f : 0.1f + 0.04f * MathUtils.sin(T * 3);
+            box(x, y, w, h, C_ACC, p, C_ACC, done ? 0.4f : 1f, done ? 1 : 2);
+            d.rect(x, y, 4, h, C_ACC, 1);
+            d.text("ВЫЗОВ ДНЯ", x + 16, y + 26, 20, C_ACC, Draw.WIDE, -1);
+            d.text(m.getString("title").replace("Вызов дня · ", ""), x + w - 16, y + 24, 14, C_MUT, Draw.BOLD, 1);
+            d.text(m.getString("goal"), x + 16, y + 50, 14, C_TXT, Draw.MAIN, -1);
+            d.text(mods.length() > 0 ? "Условия: " + mods : "Без особых условий", x + 16, y + 70, 13, C("ffb0a0"), Draw.MAIN, -1);
+            int st = Daily.streak();
+            d.text(done ? "Пройден! Новый вызов завтра · серия дней: " + st
+                    : String.format("Награда: %d монет + опыт пропуска · серия дней: %d", Daily.reward(), st), x + 16, y + 92, 13, done ? C_GREEN : C_ACC, Draw.BOLD, -1);
+        }
+        if (button(x + w - 186, y + h - 46, 170, 36, done ? "Переиграть" : "Начать", done ? NORMAL : BIG, true, 15)) openBrief(m);
+        cy += h + 10;
     }
 
     void drawToast() {
@@ -1603,8 +1761,11 @@ public class UI implements GameUI, InputProcessor {
         d.text(G0.runWallet() ? "Монеты боя: " + G0.RUN.c : "+" + G0.runCoins, 84, 62 + 13, 13, C_ACC, Draw.BOLD, -1);
         if (G0.combo >= 3 && G0.comboT > 0) {
             float k = MathUtils.clamp(G0.comboT / 3f, 0, 1);
-            d.text("Серия ×" + G0.combo, 76 + 1, 86 + 21, 20, BLACK, Draw.TITLE, -1);
-            d.text("Серия ×" + G0.combo, 76, 86 + 20, 20, new Color(C_ACC.r, C_ACC.g, C_ACC.b, 0.5f + 0.5f * k), Draw.TITLE, -1);
+            String cs = "Серия ×" + G0.combo;
+            d.text(cs, 76 + 1, 86 + 21, 20, BLACK, Draw.TITLE, -1);
+            d.text(cs, 76, 86 + 20, 20, new Color(C_ACC.r, C_ACC.g, C_ACC.b, 0.5f + 0.5f * k), Draw.TITLE, -1);
+            float sm = G0.scoreMul();
+            if (sm > 1.01f) d.text(String.format("очки ×%.1f", sm), 78 + d.textW(cs, 20, Draw.TITLE) + 8, 86 + 20, 14, C_TXT, Draw.BOLD, -1);
         }
         // прочность
         float maxHp = G0.st("maxHp");
@@ -1672,7 +1833,7 @@ public class UI implements GameUI, InputProcessor {
         }
         // метки врагов
         List<Game.E> list = new ArrayList<>();
-        for (Game.E e : G0.enemies) if (!hiddenE(e) && !e.type.equals("node")) list.add(e);
+        for (Game.E e : G0.enemies) if (!hiddenE(e) && !e.type.equals("node") && !e.phantom) list.add(e);
         final Vector3 cp = G0.camPos;
         Collections.sort(list, (a, b) -> Float.compare(a.pos.dst2(cp), b.pos.dst2(cp)));
         int arrows = 0, marks = 0;
@@ -1736,7 +1897,7 @@ public class UI implements GameUI, InputProcessor {
             float vx = (e.pos.x * cyw - e.pos.z * syw) * scl, vy = (e.pos.x * syw + e.pos.z * cyw) * scl;
             float l = (float) Math.sqrt(vx * vx + vy * vy);
             if (l > radarR - 4) { vx = vx / l * (radarR - 4); vy = vy / l * (radarR - 4); }
-            Color c = e.boss ? C("c08bff") : (e.ground ? C("ff9a3c") : ((e.type.equals("wing") || e.type.equals("kami")) ? C("ffd24a") : C("ff5a4a")));
+            Color c = e.boss ? C("c08bff") : e.phantom ? C("5ff0ff") : (e.ground ? C("ff9a3c") : ((e.type.equals("wing") || e.type.equals("kami")) ? C("ffd24a") : C("ff5a4a")));
             d.circle(rx + vx, ry + vy, e.boss ? 5 : (e.type.equals("erk") ? 1.5f : 3), c, 1);
         }
         d.rect(rx - 2, ry - 2, 4, 4, C("7cf5c0"));
@@ -1805,13 +1966,14 @@ public class UI implements GameUI, InputProcessor {
             d.wrap(hintS, W * 0.2f, H - 175, hw, 15, new Color(1, 1, 1, a), Draw.MAIN, 0);
         }
         if (commCur != null) drawComm();
+        drawCallout(W, H);
     }
 
     String hudWaveText() {
         Game G0 = g;
         if (G0.mode.equals("endless") || G0.CM == null) return "Волна " + Math.max(1, G0.wave);
         JsonValue C = G0.CM;
-        String nm = "chal".equals(C.getString("special", "")) ? C.getString("title") : "Миссия " + C.getString("id");
+        String nm = isChal(C) ? C.getString("title") : "Миссия " + C.getString("id");
         if (C.getString("type").equals("waves")) return String.format("%s · волна %d/%d", nm, Math.max(1, G0.wave), C.get("waves").size);
         return String.format("%s · %d с", nm, Math.max(0, (int) Math.ceil(G0.missionT)));
     }
