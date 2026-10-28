@@ -173,6 +173,9 @@ public class Game {
 
     void opEv(String ev) { if (op != null && ui != null) ui.opEvent(ev); }
 
+    /** Для автотеста: девчонка как при поражении. */
+    public void opDebugLose() { opEv("lose"); }
+
     /** Множитель урона от умений оператора (Радар, Рывок самурая). */
     float opDmgMul() { return (opRadarT > 0 ? 1.3f : 1f) * (opRushT > 0 ? 2f : 1f); }
 
@@ -1983,6 +1986,7 @@ public class Game {
             between = 3.5f; hp = Math.min(st("maxHp"), hp + st("regen"));
             int bonus = 0;
             if (mode.equals("endless")) bonus = addCoins((15 + 6 * wave) * difCoin * (!waveHit ? 1.5f : 1f));
+            opEv("clear");
             if (ui != null) ui.banner("Волна отбита", false, bonus > 0 ? String.format("Прочность +%d · награда +%d монет%s", (int) st("regen"), bonus, !waveHit ? " (без урона ×1.5)" : "") : "Прочность +" + (int) st("regen"));
             if (mode.equals("endless") && ui != null) ui.toast("Монеты боя: " + RUN.c + " — жми ₽ для улучшений");
             checkAch();

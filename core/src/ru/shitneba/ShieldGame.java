@@ -366,6 +366,11 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             {"op_play", "9"}, {"op_abil", "0.35"}, {"op_abil2", "1.6"}, {"op_hit", "0.25"}, {"op_rin", "8"}, {"op_rinab", "0.5"},
             {"op_elka", "8"}, {"op_elkab", "0.12"}, {"op_valk", "8"}, {"op_low", "1.2"}, {"op_save", "0.4"}, {"op_die", "5"}, {"end", "0"}};
 
+    /** 3.8.1: живая девчонка — все действия по очереди (крупные кадры вокруг неё). */
+    public static final String[][] SEQ_OPSACT = {
+            {"menu", "3"}, {"oa_start", "8"}, {"oa_wave", "1.2"}, {"oa_salute", "1.2"}, {"oa_pump", "1.2"}, {"oa_clap", "1.2"}, {"oa_cheer", "1.2"},
+            {"oa_hop", "0.5"}, {"oa_duck", "1.2"}, {"oa_worry", "1.2"}, {"oa_spin", "0.6"}, {"oa_walk", "0.8"}, {"oa_run", "0.8"}, {"oa_sad", "1.5"}, {"end", "0"}};
+
     /** Проверка объектов кампании: плотина, колонна, подстанция, радар — камера смотрит на объект. */
     public static final String[][] SEQ_OBJ = {
             {"menu", "3"}, {"o_dam", "3"}, {"o_convoy", "4"}, {"o_sub", "3"}, {"o_radar", "3"}, {"end", "0"}};
@@ -407,6 +412,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
         float wait = Float.parseFloat(seq[shotStep][1]);
         if (shotT < wait) return;
         save(shotDir + "/" + name + ".png");
+        if (ui.op.scrOk) Gdx.app.log("girl", name + " " + (int) (ui.op.scrX * draw.s) + " " + (int) (ui.op.scrFeet * draw.s) + " " + (int) (ui.op.scrH * draw.s));
         if (name.equals("menu") || name.equals("play1")) rend.dumpNext = true;
         Gdx.app.log("stat", name + " opq=" + rend.statOpq + " trn=" + rend.statTrn + " cast=" + rend.statCast + " tris=" + rend.statTris + " parts=" + FX.count() + " fps=" + Gdx.graphics.getFramesPerSecond());
         shotT = 0;
@@ -467,6 +473,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "op_low": game.hp = game.st("maxHp") * 0.2f; game.hitTarget("base", 1f); break;
             case "op_save": forceDie(); break;
             case "op_die": game.opInvT = 0; forceDie(); break;
+            case "oa_start": G.SV.tut = true; G.SV.opOwn.add("akira"); G.SV.opSel = "akira"; G.SV.opXp.put("akira", 900); ui.launch("endless"); break;
             case "o_dam": G.SV.tut = true; ui.debugLaunch("2-1"); break;
             case "o_convoy": game.quitBattle(); ui.debugLaunch("2-4"); break;
             case "o_sub": game.quitBattle(); ui.debugLaunch("5-2"); break;
@@ -484,6 +491,7 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             case "fx_bolt": world.debugBolt(cam.position); break;
             case "fx_nboom": game.explosion(ahead(45, 2f), 2f); break;
             default:
+                if (next.startsWith("oa_")) { if (next.equals("oa_sad")) game.opDebugLose(); ui.op.debugAct(next.substring(3)); break; }
                 if (next.startsWith("st_")) {
                     G.SV.tut = true; if (shotStep > 1) game.quitBattle(); ui.debugLaunch(next.substring(3)); break;
                 }

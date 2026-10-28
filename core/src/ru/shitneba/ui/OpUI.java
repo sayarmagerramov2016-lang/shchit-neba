@@ -73,6 +73,7 @@ public class OpUI {
 
     public void reset() {
         emo = "norm"; emoT = 0; jumpT = 0; panicT = 0; bubT = 0; bubCd = 0; abilT = 0; lost = false; parts.clear(); sayCd = 0; followYaw = 9;
+        act = ""; actT = 0; idleCd = 2.5f; wanderCd = 2f; sayIdleCd = 10f; offR = tgtR = 0; offF = tgtF = 0.6f; walkK = 0; panicRun = 0; yawCur = 99;
     }
 
     void bubble(String s, Ops.Op o) {
@@ -92,10 +93,16 @@ public class OpUI {
         switch (ev) {
             case "hit":
                 setEmo("panic", 0.9f); panicT = 0.6f; jump(0.25f, 6);
+                startAct("duck", 0.7f);
+                if (MathUtils.random() < 0.4f) { panicRun = 1.2f; newSpot(); }
                 if (bubCd <= 0 && MathUtils.random() < 0.4f) bubble(Ops.say("hit"), o);
                 break;
             case "kill":
                 if (!emo.equals("panic") || emoT <= 0) { setEmo("joy", 0.7f); jump(0.45f, 14); }
+                if (act.isEmpty() || IDLE.contains(act)) {
+                    String[] k = {"pump", "clap", "hop", "pump"};
+                    startAct(k[MathUtils.random(k.length - 1)], 0.9f);
+                }
                 burst(8);
                 if (bubCd <= 0) {
                     if (Ops.level(o.id) >= 3 && MathUtils.random() < 0.1f) bubble(Ops.say("warm"), o);
@@ -104,25 +111,36 @@ public class OpUI {
                 break;
             case "boss":
                 setEmo("joy", 2.4f); jump(1.8f, 26); burst(30);
+                startAct("cheer", 2.4f);
                 bubble(Ops.say("boss"), o);
                 break;
             case "wave":
                 setEmo("shout", 1.1f); bubble(Ops.say("wave"), o);
+                startAct("salute", 1.3f);
                 break;
             case "low":
                 setEmo("worry", 1.5f); bubble(Ops.say("low"), o);
+                startAct("worry", 2f);
                 break;
             case "lose":
                 lost = true; bubble(Ops.say("lose"), o);
+                startAct("sad", 99);
                 break;
             case "abil":
                 setEmo("shout", 1.2f); jump(0.4f, 12); abilT = 1.5f; burst(20);
+                startAct("twirl", 1.1f);
                 bubble(o.abil + "!", o);
                 G.sfx("wave", 0.5f);
                 break;
             case "save":
                 setEmo("shout", 1.5f); jump(0.5f, 18); burst(40); abilT = 1.5f;
+                startAct("cheer", 1.6f);
                 bubble(Ops.say("save"), o);
+                break;
+            case "clear":
+                setEmo("joy", 1.6f); jump(0.9f, 18); burst(15);
+                startAct(MathUtils.randomBoolean() ? "cheer" : "spin", 1.5f);
+                bubble(Ops.say("clear"), o);
                 break;
             default: break;
         }
@@ -204,10 +222,32 @@ public class OpUI {
     /** Куда смотрит вытянутая рука в покое (плечо → кончик пальца), оси игры. */
     static final com.badlogic.gdx.math.Vector3 ARM_REST = new com.badlogic.gdx.math.Vector3(0.25f, 0.105f, -0.305f).nor();
 
+    // ---------- поведение 3D-девчонки ----------
+    String act = ""; float actT, actDur;
+    float idleCd = 2.5f, wanderCd = 2f, sayIdleCd = 10f;
+    float offR, offF, tgtR, tgtF, walkPh, walkK, yawCur = 99, panicRun;
+    final com.badlogic.gdx.math.Quaternion armLQ = new com.badlogic.gdx.math.Quaternion(), tqL = new com.badlogic.gdx.math.Quaternion();
+    final com.badlogic.gdx.math.Vector3 dR = new com.badlogic.gdx.math.Vector3(), dL = new com.badlogic.gdx.math.Vector3();
+    /** Левая рука в покое (плечо → кисть у груди), оси девчонки. */
+    static final com.badlogic.gdx.math.Vector3 ARML_REST = new com.badlogic.gdx.math.Vector3(0.09f, -0.13f, -0.12f).nor();
+    static final java.util.List<String> IDLE = java.util.Arrays.asList("wave", "spin", "hop", "stretch", "look", "salute", "pump");
+
+    void startAct(String a, float dur) { act = a; actT = 0; actDur = dur; }
+
+    /** Для автотеста: включить действие на долго или увести в сторону. */
+    public void debugAct(String a) {
+        if (a.equals("walk")) { tgtR = offR + 1.5f; tgtF = offF; wanderCd = 99; idleCd = 99; act = ""; return; }
+        if (a.equals("run")) { tgtR = offR - 1.8f; tgtF = offF + 0.8f; panicRun = 5; wanderCd = 99; idleCd = 99; act = ""; return; }
+        wanderCd = 99; idleCd = 99; tgtR = offR; tgtF = offF; startAct(a, 30);
+    }
+
+    /** Новое место на платформе: смещение от точки у машины (вправо по экрану / вглубь), метры. */
+    void newSpot() { tgtR = MathUtils.random(-1.7f, 1.7f); tgtF = MathUtils.random(0.2f, 1.6f); } // к камере не подходит — иначе ноги уходят за низ экрана
+
     /** Масштаб девчонки в мире (рост ~1.27 м × GS). */
-    static final float GS = 1.3f;
+    static final float GS = System.getenv("SN_GS") != null ? Float.parseFloat(System.getenv("SN_GS")) : 1.95f; // SN_GS — только для проверки поз
     float followYaw = 9, gx3, gz3;
-    boolean scrOk; float scrX, scrFeet, scrH;
+    public boolean scrOk; public float scrX, scrFeet, scrH;
 
     /** Маленькая девчонка стоит на платформе рядом с комплексом. Вызывается перед рендером сцены. */
     public void world3D() {
@@ -230,7 +270,7 @@ public class OpUI {
         gm.emotion(curEmo);
         float T = u.T, dt = Math.min(0.05f, Gdx.graphics.getDeltaTime());
         // встаёт на землю в точке, которую видно справа внизу экрана (рядом с машиной), и плавно туда перебегает
-        com.badlogic.gdx.math.collision.Ray ray = g.cam.getPickRay(Gdx.graphics.getWidth() * 0.63f, Gdx.graphics.getHeight() * 0.9f);
+        com.badlogic.gdx.math.collision.Ray ray = g.cam.getPickRay(Gdx.graphics.getWidth() * 0.63f, Gdx.graphics.getHeight() * 0.87f);
         float tx, tz;
         if (ray.direction.y < -0.02f) {
             float k = (0.1f - ray.origin.y) / ray.direction.y;
@@ -241,33 +281,116 @@ public class OpUI {
         if (dist > 0.01f) { tx = tx / dist * dc; tz = tz / dist * dc; }
         if (followYaw > 8) { gx3 = tx; gz3 = tz; followYaw = 0; }
         gx3 += (tx - gx3) * Math.min(1, dt * 2.5f); gz3 += (tz - gz3) * Math.min(1, dt * 2.5f);
-        float px = gx3, pz = gz3;
+        // ---- поведение: ходит по платформе, жестикулирует, сама что-то делает между волнами
+        boolean run = g.state.equals("run");
+        actT += dt;
+        if (!act.isEmpty() && actT >= actDur && !act.equals("sad")) act = "";
+        if (lost && !act.equals("sad")) startAct("sad", 99);
+        float cfx = g.cam.direction.x, cfz = g.cam.direction.z, cl = (float) Math.sqrt(cfx * cfx + cfz * cfz);
+        if (cl < 0.01f) { cfx = 0; cfz = -1; cl = 1; }
+        cfx /= cl; cfz /= cl;
+        float crx = -cfz, crz = cfx; // вправо по экрану
+        wanderCd -= dt; idleCd -= dt; sayIdleCd -= dt; panicRun = Math.max(0, panicRun - dt);
+        if (wanderCd <= 0 && act.isEmpty() && !lost) { newSpot(); wanderCd = MathUtils.random(3.5f, 7f); }
+        float dr = tgtR - offR, df = tgtF - offF, dd = (float) Math.sqrt(dr * dr + df * df);
+        boolean still = act.equals("sad") || act.equals("duck") || act.equals("salute") || act.equals("clap");
+        boolean walking = dd > 0.06f && !still;
+        if (walking) {
+            float st = Math.min(dd, (panicRun > 0 ? 3.4f : 1.5f) * GS * dt);
+            offR += dr / dd * st; offF += df / dd * st;
+            walkPh += dt * (panicRun > 0 ? 17 : 10);
+        }
+        walkK += ((walking ? 1 : 0) - walkK) * Math.min(1, dt * 8);
+        if (idleCd <= 0 && act.isEmpty() && !walking && run && !lost) {
+            String[] k = {"wave", "spin", "hop", "stretch", "look", "look", "salute", "pump"};
+            String a = k[MathUtils.random(k.length - 1)];
+            startAct(a, a.equals("look") ? 2.4f : (a.equals("stretch") ? 1.6f : 1.2f));
+            idleCd = MathUtils.random(2.5f, 5f);
+        }
+        if (sayIdleCd <= 0 && bubCd <= 0 && run && !lost && g.enemies.size == 0) { bubble(Ops.say("idle"), o); sayIdleCd = MathUtils.random(10f, 18f); }
+        float px = gx3 + crx * offR + cfx * offF, pz = gz3 + crz * offR + cfz * offF;
+        float pr = (float) Math.sqrt(px * px + pz * pz);
+        if (pr < 3.4f && pr > 0.01f) { px = px / pr * 3.4f; pz = pz / pr * 3.4f; } // не залезать в машину
         float ground = Math.max(g.height(px, pz), 0.02f);
         float H3 = ru.shitneba.Girl3D.TOP * GS;
-        gm.root.pos.set(px + curShake * H3 * 1.3f, ground + curLift * H3 * 1.3f, pz);
+        float p = actDur > 0 ? MathUtils.clamp(actT / actDur, 0, 1) : 0;
+        float hop = act.equals("hop") ? Math.abs(MathUtils.sin(p * MathUtils.PI * 2)) * 0.28f
+                : (act.equals("cheer") ? Math.abs(MathUtils.sin(p * MathUtils.PI * 3)) * 0.22f : 0);
+        float bob = Math.abs(MathUtils.sin(walkPh)) * 0.06f * walkK;
+        gm.root.pos.set(px + curShake * H3 * 1.3f, ground + curLift * H3 * 1.3f + (hop + bob) * GS, pz);
         gm.root.scl.set(GS, GS, GS);
-        // лицом к камере вполоборота, чтобы было видно и лицо, и куда она показывает
+        // куда смотрит: идёт — по ходу, стоит — на камеру вполоборота; кружится — оборот
         float fx = g.camPos.x - px, fz = g.camPos.z - pz;
-        float face = MathUtils.atan2(-fx, -fz) - 0.55f;
-        gm.root.setEuler(0, face, 0.03f * MathUtils.sin(T * 1.1f));
-        gm.spine.scl.set(1, 1 + 0.015f * MathUtils.sin(T * 2.2f), 1);
-        if (lost) gm.head.setEuler(-0.35f, 0, 0.1f);
+        float yawT = MathUtils.atan2(-fx, -fz) - 0.55f;
+        if (walking) yawT = MathUtils.atan2(-(crx * dr + cfx * df), -(crz * dr + cfz * df));
+        if (yawCur > 50) yawCur = yawT;
+        float dy = yawT - yawCur;
+        while (dy > MathUtils.PI) dy -= MathUtils.PI2;
+        while (dy < -MathUtils.PI) dy += MathUtils.PI2;
+        yawCur += dy * Math.min(1, dt * 9);
+        float spin = 0;
+        if (act.equals("spin") || act.equals("twirl")) spin = MathUtils.PI2 * (1 - (1 - p) * (1 - p));
+        if (act.equals("cheer") && p < 0.45f) spin = MathUtils.PI2 * (p / 0.45f);
+        float lean = -0.13f * walkK * (panicRun > 0 ? 1.8f : 1f);
+        if (act.equals("duck")) lean = -0.2f;
+        if (act.equals("sad")) lean = 0.12f;
+        float roll = 0.03f * MathUtils.sin(T * 1.1f) + 0.07f * MathUtils.sin(walkPh) * walkK;
+        gm.root.setEuler(lean, yawCur + spin, roll);
+        float crouch = act.equals("duck") ? 0.8f : (act.equals("sad") ? 0.86f : (act.equals("stretch") ? 1.06f : 1f));
+        gm.spine.scl.set(1, crouch * (1 + 0.015f * MathUtils.sin(T * 2.2f)), 1);
+        // голова
+        if (act.equals("sad")) gm.head.setEuler(-0.4f, 0, 0.1f * MathUtils.sin(T * 3));
+        else if (act.equals("duck")) gm.head.setEuler(-0.3f, 0, 0);
+        else if (act.equals("look")) gm.head.setEuler(0.08f, 0.7f * MathUtils.sin(p * MathUtils.PI2), 0.05f);
+        else if (act.equals("worry")) gm.head.setEuler(-0.1f, 0.25f * MathUtils.sin(T * 9), 0);
+        else if (act.equals("wave") || act.equals("salute")) gm.head.setEuler(0.05f, -0.2f, 0.18f);
         else gm.head.setEuler(0.04f * MathUtils.sin(T * 0.9f), 0.12f * MathUtils.sin(T * 0.7f), 0.06f * MathUtils.sin(T * 1.3f));
-        if (curEmo.equals("joy") || curEmo.equals("shout")) gm.armL.setEuler(0, 0, -1.9f + 0.35f * MathUtils.sin(T * 16));
-        else if (lost) gm.armL.setEuler(0.4f, 0, 0);
-        else gm.armL.setEuler(0, 0, 0);
-        // правая рука — на цель (точка прицела далеко в сцене)
+        // руки: направление в осях девчонки (x — её правая, y — вверх, −z — вперёд)
+        float t2 = actT, sw = MathUtils.sin(walkPh);
+        boolean aimR = run && !lost;
+        dL.set(ARML_REST);
+        switch (act) {
+            case "wave": dL.set(-0.8f + 0.3f * MathUtils.sin(t2 * 14), 0.6f, -0.35f); break;
+            case "salute": dL.set(-0.75f, 0.45f, -0.6f); break;
+            case "look": dL.set(-0.55f, 0.75f, -0.45f); break;
+            case "pump": aimR = false; dR.set(0.75f, 0.75f + 0.35f * Math.abs(MathUtils.sin(t2 * 9)), -0.3f); break;
+            case "clap": {
+                aimR = false;
+                float c = Math.abs(MathUtils.sin(t2 * 12));
+                dR.set(0.04f + 0.24f * c, 0.15f, -1); dL.set(-0.04f - 0.24f * c, 0.15f, -1);
+                break;
+            }
+            case "cheer": case "twirl": case "stretch": {
+                aimR = false;
+                float w = act.equals("stretch") ? 0.05f * MathUtils.sin(t2 * 3) : 0.15f * MathUtils.sin(t2 * 12);
+                dR.set(0.8f, 0.75f, -0.2f + w); dL.set(-0.8f, 0.75f, -0.2f - w);
+                break;
+            }
+            case "hop": aimR = false; dR.set(1, 0.25f, -0.2f); dL.set(-1, 0.25f, -0.2f); break;
+            case "duck": aimR = false; dR.set(0.55f, 0.6f, -0.6f); dL.set(-0.55f, 0.6f, -0.6f); break;
+            case "worry": case "sad": aimR = false; dR.set(-0.35f, 0.65f, -0.55f); dL.set(0.35f, 0.65f, -0.55f); break;
+            default:
+                if (walkK > 0.5f) {
+                    aimR = false;
+                    if (panicRun > 0) { dR.set(0.85f, 0.7f, -0.2f + 0.5f * sw); dL.set(-0.85f, 0.7f, -0.2f - 0.5f * sw); }
+                    else { dR.set(0.3f, -1, 0.7f * sw); dL.set(-0.3f, -1, -0.7f * sw); }
+                }
+                break;
+        }
         gm.root.updateGlobal(g.root.global);
-        if (!lost && g.state.equals("run")) {
+        if (aimR) {
             v2.set(gm.armR.pos).mul(gm.armR.parent.global);
             v1.set(g.aimPoint).sub(v2).nor();
             m4.set(gm.armR.parent.global).inv();
             v1.rot(m4).nor();
             tq.setFromCross(ARM_REST, v1);
-        } else if (lost) tq.setEulerAngles(0, 70, 0);
-        else tq.idt();
-        armQ.slerp(tq, Math.min(1, dt * 8));
+        } else if (act.isEmpty() && walkK <= 0.5f) tq.idt();
+        else tq.setFromCross(ARM_REST, dR.nor());
+        tqL.setFromCross(ARML_REST, dL.nor());
+        armQ.slerp(tq, Math.min(1, dt * 10));
+        armLQ.slerp(tqL, Math.min(1, dt * 10));
         gm.armR.rot.set(armQ);
+        gm.armL.rot.set(armLQ);
         // где она на экране — для пузыря с репликой и искр
         v1.set(gm.root.pos.x, ground, gm.root.pos.z);
         v2.set(gm.root.pos.x, ground + H3 * 1.05f, gm.root.pos.z);
