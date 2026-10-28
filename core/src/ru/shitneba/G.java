@@ -17,7 +17,7 @@ import java.util.Map;
 
 /** Глобальные данные: data.json (D), сохранение (SV), звания, утилиты. Порт g.gd. */
 public final class G {
-    public static final String VER = "3.8.1";
+    public static final String VER = "3.8.2";
     public static JsonValue D;
     public static Save SV;
     public static Sfx sfx;

@@ -33,7 +33,6 @@ public final class Girl3D {
     }
 
     public static final List<String> IDS = Arrays.asList("liza", "katya", "sonya", "anya", "masha", "rin", "yuki", "elka", "akira", "sneg", "valk");
-    public static final String[] EMOS = {"norm", "blink", "shout", "joy", "panic", "worry", "cry"};
     /** Высота макушки — для подгонки камеры. */
     public static final float TOP = 1.27f;
 

@@ -244,36 +244,6 @@ public class Renderer implements Disposable {
         }
     }
 
-    /** Дорисовать отдельную модель поверх кадра своей камерой (девчонка-оператор): тот же свет сцены, без теней,
-     *  глубина очищается, рисуется в полном разрешении экрана. */
-    public void renderOverlay(Node3 root, Camera c) {
-        GL20 gl = Gdx.gl;
-        Camera old = cam;
-        cam = c;
-        poolUsed = 0; opaque.clear(); trans.clear(); casters.clear();
-        root.updateGlobal(null);
-        collect(root, false);
-        int bw = Gdx.graphics.getBackBufferWidth(), bh = Gdx.graphics.getBackBufferHeight();
-        gl.glViewport(0, 0, bw, bh);
-        gl.glDepthMask(true);
-        gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
-        gl.glFrontFace(GL20.GL_CW);
-        gl.glCullFace(GL20.GL_BACK);
-        gl.glDepthFunc(GL20.GL_LEQUAL);
-        curProg = null; curMat = null;
-        Sort.instance().sort(opaque, OPQ);
-        for (int i = 0; i < opaque.size; i++) { Item it = opaque.get(i); drawNode(it.n, it.m); }
-        Sort.instance().sort(trans, TRN);
-        for (int i = 0; i < trans.size; i++) { Item it = trans.get(i); drawNode(it.n, it.m); }
-        gl.glDepthMask(true);
-        gl.glDisable(GL20.GL_BLEND);
-        gl.glDisable(GL20.GL_CULL_FACE);
-        gl.glFrontFace(GL20.GL_CCW);
-        gl.glDisable(GL20.GL_DEPTH_TEST);
-        curProg = null; curMat = null;
-        cam = old;
-    }
-
     boolean sceneFailed;
 
     boolean ensureScene(int w, int h) {

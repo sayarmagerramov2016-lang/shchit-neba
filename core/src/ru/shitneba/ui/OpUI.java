@@ -5,28 +5,34 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Quaternion;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.Ray;
 import com.badlogic.gdx.utils.Array;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import ru.shitneba.BlackBox;
 import ru.shitneba.G;
 import ru.shitneba.Game;
+import ru.shitneba.Girl3D;
 import ru.shitneba.Ops;
 
 /**
  * Операторы в интерфейсе: окно «Операторы» (кейсы, рулетка, магазин и коллекция),
  * девчонка рядом с комплексом в бою, кнопка её умения.
- * Картинки — assets/ops (store/tools/make_ops.py): тело, лицо (7 эмоций), указывающая рука, портрет.
+ * Портреты — assets/ops (store/tools/make_ops.py); в бою — 3D-модель из Blender (Girl3D, assets/ops3d).
  */
 public class OpUI {
     final UI u;
     final Draw d;
     final Map<String, TextureRegion> tx = new HashMap<>();
-    // из make_ops.py
-    static final float IW = 256, IH = 512, FACE_X = 56, FACE_Y = 118, FACE_W = 144, FACE_H = 104;
-    static final float ARM_W = 128, ARM_H = 48, ARM_PX = 16, ARM_PY = 24, SH_X = 94, SH_Y = 232;
+    /** Размер кадра девчонки в старых 2D-картинках (make_ops.py) — по нему считаются частицы и облачко. */
+    static final float IW = 256, IH = 512;
 
     public OpUI(UI u) { this.u = u; this.d = u.d; }
 
@@ -67,7 +73,6 @@ public class OpUI {
     String emo = "norm"; float emoT, blinkT = 3, jumpT, jumpDur = 0.45f, jumpH, panicT, bubT, bubCd, abilT, sayCd;
     String bubS = "";
     boolean lost;
-    float armAng = -135;
     final Array<float[]> parts = new Array<>(); // x, y, vx, vy, life, max, type
     float partAcc;
 
@@ -166,11 +171,10 @@ public class OpUI {
         }
         float shx = panicT > 0 ? MathUtils.sin(T * 60) * 3 * (panicT / 0.6f) : 0;
         float breath = 1 + 0.012f * MathUtils.sin(T * 2.2f);
-        float sway = 1.2f * MathUtils.sin(T * 1.1f);
         float x0 = cxm - IW * k / 2 + shx, y0 = (scrOk ? scrFeet : H - 6) - IH * k * breath - lift * gh / 300f;
 
         gx = x0; gy = y0; gk = k;
-        // эмоция — для 3D-модели (рисуется раньше интерфейса, в overlay3D)
+        // эмоция — для 3D-модели (её ставит world3D перед рендером сцены)
         String e;
         if (emoT > 0) e = emo;
         else if (lost) e = "cry";
@@ -214,23 +218,22 @@ public class OpUI {
     //          3D-девчонка (модель из Blender) поверх сцены
     // =========================================================
     String curEmo = "norm"; float curLift, curShake;
-    ru.shitneba.Girl3D.Model gm; String gmKey = "";
-    final com.badlogic.gdx.graphics.PerspectiveCamera ocam = new com.badlogic.gdx.graphics.PerspectiveCamera(30, 1, 1);
-    final com.badlogic.gdx.math.Quaternion armQ = new com.badlogic.gdx.math.Quaternion(), tq = new com.badlogic.gdx.math.Quaternion();
-    final com.badlogic.gdx.math.Vector3 v1 = new com.badlogic.gdx.math.Vector3(), v2 = new com.badlogic.gdx.math.Vector3();
-    final com.badlogic.gdx.math.Matrix4 m4 = new com.badlogic.gdx.math.Matrix4();
+    Girl3D.Model gm; String gmKey = "";
+    final Quaternion armQ = new Quaternion(), tq = new Quaternion();
+    final Vector3 v1 = new Vector3(), v2 = new Vector3();
+    final Matrix4 m4 = new Matrix4();
     /** Куда смотрит вытянутая рука в покое (плечо → кончик пальца), оси игры. */
-    static final com.badlogic.gdx.math.Vector3 ARM_REST = new com.badlogic.gdx.math.Vector3(0.25f, 0.105f, -0.305f).nor();
+    static final Vector3 ARM_REST = new Vector3(0.25f, 0.105f, -0.305f).nor();
 
     // ---------- поведение 3D-девчонки ----------
     String act = ""; float actT, actDur;
     float idleCd = 2.5f, wanderCd = 2f, sayIdleCd = 10f;
     float offR, offF, tgtR, tgtF, walkPh, walkK, yawCur = 99, panicRun;
-    final com.badlogic.gdx.math.Quaternion armLQ = new com.badlogic.gdx.math.Quaternion(), tqL = new com.badlogic.gdx.math.Quaternion();
-    final com.badlogic.gdx.math.Vector3 dR = new com.badlogic.gdx.math.Vector3(), dL = new com.badlogic.gdx.math.Vector3();
+    final Quaternion armLQ = new Quaternion(), tqL = new Quaternion();
+    final Vector3 dR = new Vector3(), dL = new Vector3();
     /** Левая рука в покое (плечо → кисть у груди), оси девчонки. */
-    static final com.badlogic.gdx.math.Vector3 ARML_REST = new com.badlogic.gdx.math.Vector3(0.09f, -0.13f, -0.12f).nor();
-    static final java.util.List<String> IDLE = java.util.Arrays.asList("wave", "spin", "hop", "stretch", "look", "salute", "pump");
+    static final Vector3 ARML_REST = new Vector3(0.09f, -0.13f, -0.12f).nor();
+    static final List<String> IDLE = Arrays.asList("wave", "spin", "hop", "stretch", "look", "salute", "pump");
 
     void startAct(String a, float dur) { act = a; actT = 0; actDur = dur; }
 
@@ -261,8 +264,11 @@ public class OpUI {
         }
         String key = outfit(o);
         if (gm == null || !key.equals(gmKey)) {
-            if (gm != null) gm.root.remove();
-            gm = ru.shitneba.Girl3D.build(o.id, Ops.alt(o.id) ? 1 : 0);
+            if (gm != null) { // прежняя девчонка (сменили оператора или наряд): убрать и освободить её меши
+                gm.root.remove();
+                gm.root.forEach(n -> { if (n.mesh != null) n.mesh.dispose(); });
+            }
+            gm = Girl3D.build(o.id, Ops.alt(o.id) ? 1 : 0);
             gm.shadow.visible = false; // в мире тень настоящая
             gmKey = key;
         }
@@ -270,7 +276,7 @@ public class OpUI {
         gm.emotion(curEmo);
         float T = u.T, dt = Math.min(0.05f, Gdx.graphics.getDeltaTime());
         // встаёт на землю в точке, которую видно справа внизу экрана (рядом с машиной), и плавно туда перебегает
-        com.badlogic.gdx.math.collision.Ray ray = g.cam.getPickRay(Gdx.graphics.getWidth() * 0.63f, Gdx.graphics.getHeight() * 0.87f);
+        Ray ray = g.cam.getPickRay(Gdx.graphics.getWidth() * 0.63f, Gdx.graphics.getHeight() * 0.87f);
         float tx, tz;
         if (ray.direction.y < -0.02f) {
             float k = (0.1f - ray.origin.y) / ray.direction.y;
@@ -312,7 +318,7 @@ public class OpUI {
         float pr = (float) Math.sqrt(px * px + pz * pz);
         if (pr < 3.4f && pr > 0.01f) { px = px / pr * 3.4f; pz = pz / pr * 3.4f; } // не залезать в машину
         float ground = Math.max(g.height(px, pz), 0.02f);
-        float H3 = ru.shitneba.Girl3D.TOP * GS;
+        float H3 = Girl3D.TOP * GS;
         float p = actDur > 0 ? MathUtils.clamp(actT / actDur, 0, 1) : 0;
         float hop = act.equals("hop") ? Math.abs(MathUtils.sin(p * MathUtils.PI * 2)) * 0.28f
                 : (act.equals("cheer") ? Math.abs(MathUtils.sin(p * MathUtils.PI * 3)) * 0.22f : 0);
