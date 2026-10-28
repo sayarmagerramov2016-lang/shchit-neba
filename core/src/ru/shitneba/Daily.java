@@ -70,7 +70,7 @@ public final class Daily {
         for (String m : mods) { if (ms.length() > 0) ms.append(','); ms.append('"').append(m).append('"'); }
         Calendar c = Calendar.getInstance();
         String title = String.format("Вызов дня · %02d.%02d", c.get(Calendar.DAY_OF_MONTH), c.get(Calendar.MONTH) + 1);
-        String json = "{\"id\":\"" + id() + "\",\"title\":\"" + title + "\",\"goal\":\"Отбей 6 волн и босса на «" + G.vehName(veh) + "»\","
+        String json = "{\"id\":\"" + id() + "\",\"title\":\"" + title + "\",\"goal\":\"Отбей 6 волн и босса на " + G.vehName(veh) + "\","
                 + "\"type\":\"waves\",\"special\":\"daily\",\"veh\":\"" + veh + "\",\"theme\":" + theme + ",\"dark\":" + dark + ",\"map\":\"" + map + "\","
                 + (rain ? "\"weather\":{\"rain\":1,\"wind\":" + (r.nextInt(80) - 40) + "}," : "")
                 + "\"lvl\":" + lvl + ",\"reward\":300,\"mods\":[" + ms + "],\"waves\":[" + w + "],"
