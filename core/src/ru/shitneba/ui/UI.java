@@ -1532,8 +1532,9 @@ public class UI implements GameUI, InputProcessor {
                 JsonValue M = G.D.get("MODS").get(md.asString());
                 if (M != null) label("•  " + M.getString("name") + ": " + M.getString("desc"), 14, C("ffb0a0"));
             }
-            Integer pvI = isDaily(m) ? (Daily.doneToday() ? 3 : 0) : chal ? G.SV.chal.get(m.getString("id")) : G.SV.camp.get(m.getString("id"));
-            int prev = pvI == null ? 0 : pvI;
+            int prev;
+            if (isDaily(m)) prev = Daily.doneToday() ? 3 : 0;
+            else { Integer pvI = (chal ? G.SV.chal : G.SV.camp).get(m.getString("id")); prev = pvI == null ? 0 : pvI; }
             section("Звёзды");
             JsonValue st = m.get("stars");
             for (int i = 0; i < st.size; i++) {
