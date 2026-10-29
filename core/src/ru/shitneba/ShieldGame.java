@@ -566,7 +566,10 @@ public class ShieldGame extends ApplicationAdapter implements UI.Host, UI.Strike
             default:
                 if (next.startsWith("oa_")) { if (next.equals("oa_sad")) game.opDebugLose(); ui.op.debugAct(next.substring(3)); break; }
                 if (next.startsWith("st_")) {
-                    G.SV.tut = true; if (shotStep > 1) game.quitBattle(); ui.debugLaunch(next.substring(3)); break;
+                    G.SV.tut = true;
+                    String op = System.getenv("SN_OP"); // SN_OP=akira — оператор в кадрах магазина
+                    if (op != null) { if (!G.SV.opOwn.contains(op)) G.SV.opOwn.add(op); G.SV.opSel = op; G.SV.opXp.put(op, 900); }
+                    if (shotStep > 1) game.quitBattle(); ui.debugLaunch(next.substring(3)); break;
                 }
                 if (next.startsWith("m_")) {
                     String[] p = next.split("_");
